@@ -1,6 +1,22 @@
 import 'package:flutter/material.dart';
 
+import 'character_sheet.dart';
 import 'game_controller.dart';
+
+/// 알림 점 (확인할 것이 있음).
+class _Dot extends StatelessWidget {
+  const _Dot();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 8,
+    height: 8,
+    decoration: const BoxDecoration(
+      color: Color(0xFFFFD54F),
+      shape: BoxShape.circle,
+    ),
+  );
+}
 
 /// 하단 행동 버튼의 카테고리.
 enum ActionCategory {
@@ -35,17 +51,22 @@ class GameActionButton {
     required this.icon,
     this.onPressed,
     this.disabledReason,
+    this.highlight = false,
   });
 
   const GameActionButton.comingSoon({required this.label, required this.icon})
     : onPressed = null,
-      disabledReason = DisabledReason.comingSoon;
+      disabledReason = DisabledReason.comingSoon,
+      highlight = false;
 
   /// 길게 눌렀을 때 툴팁으로 표시.
   final String label;
   final IconData icon;
   final VoidCallback? onPressed;
   final DisabledReason? disabledReason;
+
+  /// 확인할 것이 있음을 알리는 점 표시 (예: 남은 능력치 포인트).
+  final bool highlight;
 
   DisabledReason? get activeReason => onPressed == null ? disabledReason : null;
 
@@ -58,8 +79,9 @@ class GameActionButton {
 /// 카테고리별 행동 목록. 새 행동은 여기에 추가한다.
 List<GameActionButton> actionsFor(
   ActionCategory category,
-  GameController controller,
-) {
+  GameController controller, {
+  required VoidCallback openCharacterSheet,
+}) {
   switch (category) {
     case ActionCategory.movement:
       return [
@@ -107,10 +129,18 @@ List<GameActionButton> actionsFor(
         GameActionButton.comingSoon(label: '장비', icon: Icons.shield),
       ];
     case ActionCategory.skill:
-      return const [
-        GameActionButton.comingSoon(label: '적성', icon: Icons.school),
-        GameActionButton.comingSoon(label: '주문', icon: Icons.auto_fix_high),
-        GameActionButton.comingSoon(label: '능력', icon: Icons.bolt),
+      return [
+        GameActionButton(
+          label: '캐릭터',
+          icon: Icons.person,
+          onPressed: openCharacterSheet,
+          highlight: controller.hasStatPoints,
+        ),
+        const GameActionButton.comingSoon(label: '적성', icon: Icons.school),
+        const GameActionButton.comingSoon(
+          label: '주문',
+          icon: Icons.auto_fix_high,
+        ),
       ];
   }
 }
@@ -143,6 +173,8 @@ class _ActionBarState extends State<ActionBar> {
                   child: _CategoryTab(
                     category: c,
                     selected: c == _category,
+                    highlight:
+                        c == ActionCategory.skill && controller.hasStatPoints,
                     onTap: () => setState(() => _category = c),
                   ),
                 ),
@@ -159,6 +191,8 @@ class _ActionBarState extends State<ActionBar> {
                       for (final (i, action) in actionsFor(
                         _category,
                         controller,
+                        openCharacterSheet: () =>
+                            showCharacterSheet(context, controller),
                       ).indexed) ...[
                         if (i > 0) const SizedBox(width: 6),
                         Expanded(child: _ActionButton(action: action)),
@@ -176,11 +210,13 @@ class _CategoryTab extends StatelessWidget {
   const _CategoryTab({
     required this.category,
     required this.selected,
+    required this.highlight,
     required this.onTap,
   });
 
   final ActionCategory category;
   final bool selected;
+  final bool highlight;
   final VoidCallback onTap;
 
   @override
@@ -200,10 +236,18 @@ class _CategoryTab extends StatelessWidget {
               ),
             ),
           ),
-          child: Icon(
-            category.icon,
-            size: 22,
-            color: selected ? accent : const Color(0xFF8A8478),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                category.icon,
+                size: 22,
+                color: selected ? accent : const Color(0xFF8A8478),
+              ),
+              if (highlight)
+                const Positioned(right: -6, top: -2, child: _Dot()),
+            ],
           ),
         ),
       ),
@@ -234,6 +278,8 @@ class _ActionButton extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Icon(action.icon, size: 28),
+            if (action.highlight)
+              const Positioned(right: -10, top: -4, child: _Dot()),
             if (reason != null)
               Positioned(
                 right: -14,

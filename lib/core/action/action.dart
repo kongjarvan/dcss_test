@@ -103,10 +103,12 @@ class AttackAction extends Action {
     if (!hit) {
       game.message('$subject$object 공격했지만 빗나갔다.');
     } else {
-      final damage = max(
-        0,
-        1 + rng.nextInt(a.maxDamage) - rng.nextInt(d.armor + 1),
+      final roll = _scale(
+        1 + rng.nextInt(a.maxDamage),
+        attacker.meleeDamageMultiplier,
+        rng,
       );
+      final damage = max(0, roll - rng.nextInt(d.armor + 1));
       if (damage == 0) {
         game.message('$subject$object 공격했지만 피해를 주지 못했다.');
       } else {
@@ -116,5 +118,14 @@ class AttackAction extends Action {
       }
     }
     return ActionResult.success(attacker.attackDelay);
+  }
+
+  /// [value] × [multiplier]를 확률적으로 반올림한다.
+  /// 예) 4 × 1.15 = 4.6 → 60% 확률로 5, 40% 확률로 4. 기대값이 정확히 유지된다.
+  static int _scale(int value, double multiplier, Random rng) {
+    if (multiplier == 1.0) return value;
+    final scaled = value * multiplier;
+    final whole = scaled.floor();
+    return whole + (rng.nextDouble() < scaled - whole ? 1 : 0);
   }
 }

@@ -7,6 +7,7 @@ import '../render/map_painter.dart';
 import '../render/map_zoom.dart';
 import '../render/tile_renderer.dart';
 import 'action_bar.dart';
+import 'character_sheet.dart';
 import 'game_controller.dart';
 
 String _turns(int aut) => (aut / autPerTurn).toStringAsFixed(1);
@@ -179,6 +180,33 @@ class _StatusBar extends StatelessWidget {
                 color: const Color(0xFFBDB6A8),
                 visualDensity: VisualDensity.compact,
               ),
+            ],
+          ),
+          Row(
+            children: [
+              SizedBox(
+                width: 84,
+                child: Text(
+                  'Lv ${player.level}',
+                  style: const TextStyle(
+                    color: Color(0xFF8FB8FF),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: xpProgress(player),
+                    minHeight: 6,
+                    color: const Color(0xFF5B8DEF),
+                    backgroundColor: const Color(0xFF1C2433),
+                  ),
+                ),
+              ),
+              // 위 행의 새 게임 버튼 폭만큼 비워 두 바의 끝을 맞춘다.
+              const SizedBox(width: 40),
             ],
           ),
           const SizedBox(height: 6),

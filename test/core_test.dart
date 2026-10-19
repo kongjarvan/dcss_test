@@ -33,11 +33,12 @@ MonsterType sureHitter({required int speed, int attackDelay = autPerTurn}) =>
       speed: speed,
       attackDelay: attackDelay,
       stats: const CombatStats(accuracy: 1000, maxDamage: 1, evasion: 0),
+      xp: 1,
     );
 
 Game duel(MonsterType type) {
   final player = Player(pos: const Pos(3, 3))
-    ..stats = const CombatStats(accuracy: 1, maxDamage: 1, evasion: 0);
+    ..baseStats = const CombatStats(accuracy: 1, maxDamage: 1, evasion: 0);
   final monster = Monster(type, pos: const Pos(4, 3))..awake = true;
   return Game(
     rng: Random(1),

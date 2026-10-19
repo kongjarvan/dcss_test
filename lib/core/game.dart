@@ -9,6 +9,8 @@ import 'fov/shadowcasting.dart';
 import 'geometry.dart';
 import 'korean.dart';
 import 'message_log.dart';
+import 'progression/attributes.dart';
+import 'progression/experience.dart';
 import 'time/energy.dart';
 import 'world/dungeon_generator.dart';
 import 'world/dungeon_map.dart';
@@ -158,9 +160,30 @@ class Game {
     if (victim.isPlayer) {
       message('당신은 죽었다...');
     } else {
-      if (killer.isPlayer) kills++;
       message('${eulReul(victim.name)} 죽였다!');
+      if (killer.isPlayer && victim is Monster) {
+        kills++;
+        _grantXp(victim.type.xp);
+      }
     }
+  }
+
+  void _grantXp(int amount) {
+    for (final level in player.gainXp(amount)) {
+      message('레벨 업! 레벨 ${numberIGa(level)} 되었다.');
+      if (level % Experience.statPointInterval == 0) {
+        message('능력치를 올릴 수 있다. (적성 탭 → 캐릭터)');
+      }
+    }
+  }
+
+  /// 능력치 포인트 투자. 턴을 소모하지 않는다.
+  bool increaseAttribute(Attribute attribute) {
+    if (!player.spendStatPoint(attribute)) return false;
+    message(
+      '${iGa(attribute.label)} ${numberIGa(player.attributes[attribute])} 되었다.',
+    );
+    return true;
   }
 
   /// 가장 가까운 적을 공격하거나, 인접하지 않았으면 한 칸 다가가는 행동.

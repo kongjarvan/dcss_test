@@ -14,3 +14,10 @@ String iGa(String word) => '$word${_hasBatchim(word) ? '이' : '가'}';
 
 /// 은/는
 String eunNeun(String word) => '$word${_hasBatchim(word) ? '은' : '는'}';
+
+/// 숫자 + 이/가. 읽는 소리 기준: 2 → "2가", 3 → "3이".
+String numberIGa(int n) {
+  // 끝자리가 0이면 영/십/백/천/만 → 모두 받침 있음.
+  const batchimDigits = {0, 1, 3, 6, 7, 8};
+  return '$n${batchimDigits.contains(n.abs() % 10) ? '이' : '가'}';
+}

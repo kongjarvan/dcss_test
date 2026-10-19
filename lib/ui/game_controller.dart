@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/action/action.dart';
 import '../core/game.dart';
 import '../core/geometry.dart';
+import '../core/progression/attributes.dart';
 
 /// 자동 이동 종류.
 enum AutoMoveMode {
@@ -45,6 +46,9 @@ class GameController extends ChangeNotifier {
   /// 자동 탐험 버튼 사용 가능 여부.
   bool get canExplore => !_game.isGameOver && !enemyInSight;
 
+  /// 투자하지 않은 능력치 포인트가 있는지.
+  bool get hasStatPoints => _game.player.unspentStatPoints > 0;
+
   /// 휴식 버튼 사용 가능 여부.
   bool get canRest => !_game.isGameOver && !enemyInSight && !isHpFull;
 
@@ -79,6 +83,10 @@ class GameController extends ChangeNotifier {
     if (_game.isGameOver) return;
     _game.playerAct(const WaitAction());
     notifyListeners();
+  }
+
+  void increaseAttribute(Attribute attribute) {
+    if (_game.increaseAttribute(attribute)) notifyListeners();
   }
 
   void autoFight() {

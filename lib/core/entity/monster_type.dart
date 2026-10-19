@@ -8,6 +8,7 @@ class MonsterType {
     required this.name,
     required this.maxHp,
     required this.stats,
+    required this.xp,
     this.speed = normalSpeed,
     this.moveDelay = autPerTurn,
     this.attackDelay = autPerTurn,
@@ -17,6 +18,9 @@ class MonsterType {
   final String name;
   final int maxHp;
   final CombatStats stats;
+
+  /// 처치 시 얻는 경험치.
+  final int xp;
   final int speed;
   final int moveDelay;
   final int attackDelay;
@@ -28,5 +32,6 @@ abstract final class MonsterTypes {
     name: '고블린',
     maxHp: 8,
     stats: CombatStats(accuracy: 6, maxDamage: 4, evasion: 4),
+    xp: 6,
   );
 }
