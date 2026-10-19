@@ -1,17 +1,111 @@
 # dc_test
 
-A new Flutter project.
+Flutter로 만드는 모바일 턴제 로그라이크 던전 탐험 게임입니다.
+**Dungeon Crawl Stone Soup(DCSS)** 의 플레이 방식을 기반으로 합니다.
 
-## Getting Started
+## 게임 소개
 
-This project is a starting point for a Flutter application.
+- **턴제**: 플레이어가 행동해야 시간이 흐르고, 그만큼 몬스터와 오브젝트도 움직입니다.
+- **행동마다 소요 시간이 다름**: 이동 1.0턴, 공격 1.2턴(현재 무기 기준)처럼 행동마다 걸리는 시간이 다릅니다.
+  몬스터는 속도에 따라 플레이어 1턴 동안 여러 번 행동하거나 덜 행동합니다.
+- **시야와 지도 기억**: 반경 8칸 안에서 벽에 가려지지 않은 곳만 보입니다. 한 번 본 곳은 어둡게 기억됩니다.
+- **무작위 던전**: 매 게임마다 방과 복도, 문이 새로 만들어집니다.
 
-A few resources to get you started if this is your first Flutter project:
+### 종족
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+게임을 시작할 때 종족을 고릅니다. 세 종족 모두 능력치 합은 30이고 성향만 다릅니다.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| 종족 | 힘 | 민첩 | 지능 | 특징 |
+|---|---|---|---|---|
+| 인간 | 10 | 10 | 10 | 모든 능력치가 고름 |
+| 엘프 | 6 | 12 | 12 | 날렵하고 총명하지만 몸이 약함 |
+| 드워프 | 12 | 10 | 8 | 힘이 강하고 근접전에 유리함 |
+
+### 능력치
+
+능력치 10이 기준이며, 높을수록 아래 효과가 커집니다.
+
+| 능력치 | 효과 | 1 올릴 때 |
+|---|---|---|
+| 힘 | 근접 피해 증가, 방어구 이동속도 패널티 감소 | 최대 HP +4 |
+| 민첩 | 명중·회피 증가, 체력 재생 증가, 원거리 피해·은신 효율 증가 | 최대 HP +2 |
+| 지능 | 주문 속도·성공률·피해 증가, 마나 소모 감소 | 최대 HP +1, 최대 MP +3 |
+
+> 방어구, 원거리 공격, 은신, 주문은 아직 구현되지 않아 해당 효과는 나중에 적용됩니다.
+
+### 레벨업
+
+- 몬스터를 처치하면 경험치를 얻습니다.
+- 레벨이 오를 때마다 **능력치 포인트 1개**를 받습니다. 최대 레벨은 27입니다.
+- 레벨업하면 능력치 선택 창이 뜨며, **포인트를 모두 쓸 때까지 닫히지 않습니다.**
+
+## 조작법
+
+### 맵
+
+| 조작 | 동작 |
+|---|---|
+| 인접한 칸 탭 | 그 방향으로 1칸 이동. 몬스터가 있으면 공격, 닫힌 문이면 문 열기 |
+| 자기 자신 탭 | 1턴 대기 |
+| 멀리 있는 칸 탭 | 이미 탐험한 길을 따라 자동 이동 (몬스터가 보이면 사용 불가) |
+| 자동 진행 중 맵 탭 | 자동 이동 / 탐험 / 휴식 중단 |
+| 두 손가락 핀치 | 맵 확대 / 축소 |
+
+- 기본 배율에서는 시야 전체가 화면에 들어옵니다.
+- 확대해서 화면 밖에 있는 몬스터는 화면 가장자리의 **빨간 화살표**로 방향을 알려줍니다.
+
+### 하단 행동 버튼
+
+모든 버튼은 아이콘으로 표시됩니다. **버튼을 길게 누르면 이름이 나옵니다.**
+버튼 모서리의 작은 배지는 사용할 수 없는 이유입니다 (🔒 준비 중, 👁 적이 보임, ♥ 회복 완료).
+
+| 탭 | 버튼 |
+|---|---|
+| 이동 | 1턴 대기 · 휴식(HP·MP가 가득 찰 때까지) · 자동 탐험 |
+| 전투 | 자동 전투(가장 가까운 적을 공격하거나 다가감) · 1턴 대기 · 원거리 공격(준비 중) |
+| 아이템 | 줍기 · 소지품 · 장비 (모두 준비 중) |
+| 적성 | 캐릭터(레벨·능력치 확인 및 포인트 투자) · 적성 · 주문 (준비 중) |
+
+- **자동 탐험**: 아직 보지 못한 곳을 찾아 계속 이동합니다. 몬스터가 보이거나 피해를 입으면 멈춥니다.
+- **휴식**: 몬스터가 보이거나 피해를 입으면 멈춥니다.
+- 자동 이동·탐험·휴식 중에는 하단에 **중단 버튼**이 나타납니다.
+- 쓰지 않은 능력치 포인트가 있으면 적성 탭과 캐릭터 버튼에 **노란 점**이 표시됩니다.
+
+### 상단 상태바
+
+- HP / MP / 레벨과 경험치 막대
+- 현재 층, 경과 시간, 직전 행동에 걸린 턴, 처치 수
+- 오른쪽 위 ⟳ 버튼: 새 게임 (확인 후 종족 선택 화면으로)
+
+## 실행 방법
+
+```bash
+flutter pub get
+flutter run          # 연결된 Android 기기 또는 에뮬레이터에서 실행
+flutter test         # 테스트 실행
+```
+
+## 프로젝트 구조
+
+```
+lib/
+├─ core/        게임 로직 (Flutter 의존성 없는 순수 Dart)
+│  ├─ game.dart          턴 진행, 메시지, 자동 전투·탐험 목표 계산
+│  ├─ time/              행동력(에너지) 스케줄러
+│  ├─ action/            이동·공격·문 열기·대기
+│  ├─ ai/                몬스터 AI, A* 경로탐색
+│  ├─ fov/               시야 계산 (Recursive Shadowcasting)
+│  ├─ world/             맵, 타일, 던전 생성
+│  ├─ entity/            플레이어, 몬스터
+│  └─ progression/       종족, 능력치, 능력치 효과, 경험치
+├─ render/      맵 그리기, 타일 그래픽, 확대/축소
+└─ ui/          화면, 입력 처리, 하단 버튼, 캐릭터 창
+```
+
+밸런스 수치는 아래 파일에 모여 있습니다.
+
+- 능력치 효과와 HP/MP 증가량: `lib/core/progression/attribute_effects.dart`
+- 경험치 곡선, 최대 레벨: `lib/core/progression/experience.dart`
+- 종족별 시작 능력치: `lib/core/progression/species.dart`
+- 시작 HP/MP, 재생 간격: `lib/core/entity/actor.dart` (`Player`)
+- 몬스터 수치: `lib/core/entity/monster_type.dart`
