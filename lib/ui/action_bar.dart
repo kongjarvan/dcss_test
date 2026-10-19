@@ -11,6 +11,19 @@ enum ActionCategory {
 
   const ActionCategory(this.label, this.icon);
 
+  /// 길게 눌렀을 때 툴팁으로 표시.
+  final String label;
+  final IconData icon;
+}
+
+/// 버튼을 쓸 수 없는 이유. 버튼 모서리에 작은 배지 아이콘으로 표시.
+enum DisabledReason {
+  comingSoon('준비 중', Icons.lock_outline),
+  enemyInSight('적이 보임', Icons.visibility),
+  hpFull('체력 가득', Icons.favorite);
+
+  const DisabledReason(this.label, this.icon);
+
   final String label;
   final IconData icon;
 }
@@ -21,15 +34,25 @@ class GameActionButton {
     required this.label,
     required this.icon,
     this.onPressed,
-    this.comingSoon = false,
+    this.disabledReason,
   });
 
+  const GameActionButton.comingSoon({required this.label, required this.icon})
+    : onPressed = null,
+      disabledReason = DisabledReason.comingSoon;
+
+  /// 길게 눌렀을 때 툴팁으로 표시.
   final String label;
   final IconData icon;
   final VoidCallback? onPressed;
+  final DisabledReason? disabledReason;
 
-  /// 아직 구현되지 않은 기능 자리.
-  final bool comingSoon;
+  DisabledReason? get activeReason => onPressed == null ? disabledReason : null;
+
+  String get tooltip {
+    final reason = activeReason;
+    return reason == null ? label : '$label · ${reason.label}';
+  }
 }
 
 /// 카테고리별 행동 목록. 새 행동은 여기에 추가한다.
@@ -41,19 +64,23 @@ List<GameActionButton> actionsFor(
     case ActionCategory.movement:
       return [
         GameActionButton(
-          label: '대기',
-          icon: Icons.hourglass_bottom,
+          label: '1턴 대기',
+          icon: Icons.hourglass_empty,
           onPressed: controller.waitTurn,
         ),
         GameActionButton(
-          label: '휴식',
-          icon: Icons.bedtime,
-          onPressed: controller.rest,
+          label: '휴식 (체력 완전 회복)',
+          icon: Icons.hotel,
+          onPressed: controller.canRest ? controller.rest : null,
+          disabledReason: controller.enemyInSight
+              ? DisabledReason.enemyInSight
+              : DisabledReason.hpFull,
         ),
-        const GameActionButton(
+        GameActionButton(
           label: '자동 탐험',
           icon: Icons.explore,
-          comingSoon: true,
+          onPressed: controller.canExplore ? controller.explore : null,
+          disabledReason: DisabledReason.enemyInSight,
         ),
       ];
     case ActionCategory.combat:
@@ -64,35 +91,26 @@ List<GameActionButton> actionsFor(
           onPressed: controller.autoFight,
         ),
         GameActionButton(
-          label: '대기',
-          icon: Icons.hourglass_bottom,
+          label: '1턴 대기',
+          icon: Icons.hourglass_empty,
           onPressed: controller.waitTurn,
         ),
-        const GameActionButton(
+        const GameActionButton.comingSoon(
           label: '원거리 공격',
           icon: Icons.ads_click,
-          comingSoon: true,
         ),
       ];
     case ActionCategory.item:
       return const [
-        GameActionButton(label: '줍기', icon: Icons.pan_tool, comingSoon: true),
-        GameActionButton(
-          label: '소지품',
-          icon: Icons.inventory_2,
-          comingSoon: true,
-        ),
-        GameActionButton(label: '장비', icon: Icons.shield, comingSoon: true),
+        GameActionButton.comingSoon(label: '줍기', icon: Icons.pan_tool),
+        GameActionButton.comingSoon(label: '소지품', icon: Icons.inventory_2),
+        GameActionButton.comingSoon(label: '장비', icon: Icons.shield),
       ];
     case ActionCategory.skill:
       return const [
-        GameActionButton(label: '적성', icon: Icons.auto_graph, comingSoon: true),
-        GameActionButton(
-          label: '주문',
-          icon: Icons.auto_fix_high,
-          comingSoon: true,
-        ),
-        GameActionButton(label: '능력', icon: Icons.bolt, comingSoon: true),
+        GameActionButton.comingSoon(label: '적성', icon: Icons.school),
+        GameActionButton.comingSoon(label: '주문', icon: Icons.auto_fix_high),
+        GameActionButton.comingSoon(label: '능력', icon: Icons.bolt),
       ];
   }
 }
@@ -132,16 +150,10 @@ class _ActionBarState extends State<ActionBar> {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 56,
-            // 자동 이동 중에는 어떤 탭이든 '중단'만 표시.
+            height: 52,
+            // 자동 진행(이동/탐험/휴식) 중에는 어떤 탭이든 '중단'만 표시.
             child: controller.isTraveling
-                ? SizedBox.expand(
-                    child: FilledButton.icon(
-                      onPressed: controller.stopTravel,
-                      icon: const Icon(Icons.stop),
-                      label: const Text('이동 중단'),
-                    ),
-                  )
+                ? _StopButton(controller: controller)
                 : Row(
                     children: [
                       for (final (i, action) in actionsFor(
@@ -174,33 +186,25 @@ class _CategoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    final color = selected ? accent : const Color(0xFF8A8478);
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: selected ? accent : const Color(0xFF2E2924),
-              width: selected ? 2 : 1,
-            ),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(category.icon, size: 16, color: color),
-            const SizedBox(width: 4),
-            Text(
-              category.label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+    return Tooltip(
+      message: category.label,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? accent : const Color(0xFF2E2924),
+                width: selected ? 2 : 1,
               ),
             ),
-          ],
+          ),
+          child: Icon(
+            category.icon,
+            size: 22,
+            color: selected ? accent : const Color(0xFF8A8478),
+          ),
         ),
       ),
     );
@@ -214,30 +218,71 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final enabled = action.onPressed != null;
-    return FilledButton.tonal(
-      onPressed: action.onPressed,
-      style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(action.icon, size: 20),
-          const SizedBox(height: 2),
-          Text(
-            action.label,
-            style: const TextStyle(fontSize: 12),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+    final reason = action.activeReason;
+    return Tooltip(
+      message: action.tooltip,
+      child: FilledButton.tonal(
+        onPressed: action.onPressed,
+        style: FilledButton.styleFrom(
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-          if (action.comingSoon && !enabled)
-            const Text(
-              '준비 중',
-              style: TextStyle(fontSize: 9, color: Color(0xFF8A8478)),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Icon(action.icon, size: 28),
+            if (reason != null)
+              Positioned(
+                right: -14,
+                top: -6,
+                child: Icon(
+                  reason.icon,
+                  size: 14,
+                  color: const Color(0xFFB0A898),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StopButton extends StatelessWidget {
+  const _StopButton({required this.controller});
+
+  final GameController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final (modeIcon, tooltip) = switch (controller.autoMoveMode) {
+      AutoMoveMode.explore => (Icons.explore, '탐험 중단'),
+      AutoMoveMode.rest => (Icons.hotel, '휴식 중단'),
+      _ => (Icons.route, '이동 중단'),
+    };
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox.expand(
+        child: FilledButton(
+          onPressed: controller.stopTravel,
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
-        ],
+          ),
+          // 진행 중인 행동 아이콘 + 정지 아이콘
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(modeIcon, size: 22),
+              const SizedBox(width: 6),
+              const Icon(Icons.stop_circle, size: 30),
+            ],
+          ),
+        ),
       ),
     );
   }

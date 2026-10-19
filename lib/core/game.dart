@@ -163,29 +163,6 @@ class Game {
     }
   }
 
-  /// HP가 가득 차거나 몬스터가 보일 때까지 쉰다.
-  void rest() {
-    if (isGameOver) return;
-    if (visibleMonsters.isNotEmpty) {
-      message('근처에 몬스터가 있어 쉴 수 없다.');
-      return;
-    }
-    if (player.hp >= player.maxHp) {
-      message('이미 체력이 가득하다.');
-      return;
-    }
-    final start = time;
-    var turns = 0;
-    while (player.hp < player.maxHp &&
-        visibleMonsters.isEmpty &&
-        !isGameOver &&
-        turns++ < 500) {
-      playerAct(const WaitAction());
-    }
-    lastActionCost = time - start;
-    if (visibleMonsters.isEmpty) message('휴식을 마쳤다.');
-  }
-
   /// 가장 가까운 적을 공격하거나, 인접하지 않았으면 한 칸 다가가는 행동.
   /// 보이는 적이 없거나 다가갈 길이 없으면 null.
   Action? autoFightAction() {
@@ -205,6 +182,32 @@ class Game {
       );
       if (path != null && path.isNotEmpty) {
         return MoveAction(path.first - player.pos);
+      }
+    }
+    return null;
+  }
+
+  /// 탐험 경계: 이미 본 통행 가능한 칸 중, 아직 보지 못한 칸과 맞닿은 칸.
+  bool isExploreFrontier(Pos p) =>
+      map.isExplored(p) &&
+      map[p].traversable &&
+      Direction.all.any((d) {
+        final q = p + d;
+        return map.contains(q) && !map.isExplored(q);
+      });
+
+  /// 이동 칸 수 기준으로 가장 가까운 탐험 경계. 더 탐험할 곳이 없으면 null.
+  Pos? exploreTarget() {
+    final visited = <Pos>{player.pos};
+    final queue = <Pos>[player.pos];
+    for (var i = 0; i < queue.length; i++) {
+      final p = queue[i];
+      if (p != player.pos && isExploreFrontier(p)) return p;
+      for (final d in Direction.all) {
+        final q = p + d;
+        if (map.isExplored(q) && map[q].traversable && visited.add(q)) {
+          queue.add(q);
+        }
       }
     }
     return null;

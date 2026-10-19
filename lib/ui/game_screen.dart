@@ -4,6 +4,7 @@ import '../core/game.dart';
 import '../core/message_log.dart';
 import '../core/time/energy.dart';
 import '../render/map_painter.dart';
+import '../render/map_zoom.dart';
 import '../render/tile_renderer.dart';
 import 'action_bar.dart';
 import 'game_controller.dart';
@@ -23,6 +24,10 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late final GameController _controller = GameController(seed: widget.seed);
   static const _renderer = ProceduralTileRenderer();
+
+  /// 맵 확대 배율. 1.0 = 시야 전체가 화면에 들어오는 크기.
+  double _zoom = MapZoom.minZoom;
+  double _zoomAtGestureStart = MapZoom.minZoom;
 
   @override
   void dispose() {
@@ -84,10 +89,21 @@ class _GameScreenState extends State<GameScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        // 세로 화면 기준 가로 11칸 정도가 보이도록.
-        final tileSize = (size.width / 11).floorToDouble().clamp(28.0, 64.0);
+        final tileSize = MapZoom.tileSize(size, Game.fovRadius, _zoom);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
+          // 두 손가락 핀치로 확대/축소.
+          onScaleStart: (_) => _zoomAtGestureStart = _zoom,
+          onScaleUpdate: (details) {
+            if (details.pointerCount < 2) return;
+            setState(() {
+              _zoom = MapZoom.clamp(
+                _zoomAtGestureStart * details.scale,
+                size,
+                Game.fovRadius,
+              );
+            });
+          },
           onTapUp: (details) => _controller.tapTile(
             MapPainter.tileAt(
               details.localPosition,
@@ -250,10 +266,12 @@ class _GameOverOverlay extends StatelessWidget {
                 style: const TextStyle(color: Colors.white70, fontSize: 15),
               ),
               const SizedBox(height: 24),
-              FilledButton.icon(
+              IconButton.filled(
                 onPressed: onRestart,
+                tooltip: '다시 시작',
+                iconSize: 36,
+                padding: const EdgeInsets.all(14),
                 icon: const Icon(Icons.replay),
-                label: const Text('다시 시작'),
               ),
             ],
           ),

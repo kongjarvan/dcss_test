@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/rendering.dart';
 
 import '../core/game.dart';
@@ -44,12 +46,11 @@ class MapPainter extends CustomPainter {
 
     final map = game.map;
     final origin = cameraOrigin(size, game.player.pos, tileSize);
-    Rect rectOf(Pos p) => Rect.fromLTWH(
-      ((p.x - origin.dx) * tileSize).roundToDouble(),
-      ((p.y - origin.dy) * tileSize).roundToDouble(),
-      tileSize,
-      tileSize,
-    );
+    // 타일 크기가 소수여도 이웃 타일과 틈/겹침이 없도록 경계를 반올림.
+    double sx(num x) => ((x - origin.dx) * tileSize).roundToDouble();
+    double sy(num y) => ((y - origin.dy) * tileSize).roundToDouble();
+    Rect rectOf(Pos p) =>
+        Rect.fromLTRB(sx(p.x), sy(p.y), sx(p.x + 1), sy(p.y + 1));
 
     final fog = Paint()..color = const Color(0x99000000);
     final x0 = origin.dx.floor();
@@ -78,8 +79,11 @@ class MapPainter extends CustomPainter {
       );
     }
 
+    final screen = Offset.zero & size;
+    final offscreen = <Offset>[];
     for (final m in game.visibleMonsters) {
       final rect = rectOf(m.pos);
+      if (!screen.contains(rect.center)) offscreen.add(rect.center);
       renderer.drawMonster(canvas, rect, m.type);
       if (m.hp < m.maxHp) _drawHpBar(canvas, rect, m.hp / m.maxHp);
     }
@@ -87,7 +91,54 @@ class MapPainter extends CustomPainter {
     if (game.player.isAlive) {
       renderer.drawPlayer(canvas, rectOf(game.player.pos));
     }
+
+    for (final point in offscreen) {
+      _drawOffscreenArrow(canvas, size, point);
+    }
     canvas.restore();
+  }
+
+  /// 화면 밖 [point]를 향하는 화살표를 놓을 화면 가장자리 위치.
+  /// [point]가 화면 안이면 null.
+  static Offset? edgeIndicatorPosition(
+    Size size,
+    Offset point, {
+    double margin = 16,
+  }) {
+    if ((Offset.zero & size).contains(point)) return null;
+    final center = size.center(Offset.zero);
+    final v = point - center;
+    final sx = v.dx == 0
+        ? double.infinity
+        : (size.width / 2 - margin) / v.dx.abs();
+    final sy = v.dy == 0
+        ? double.infinity
+        : (size.height / 2 - margin) / v.dy.abs();
+    return center + v * math.min(sx, sy);
+  }
+
+  void _drawOffscreenArrow(Canvas canvas, Size size, Offset point) {
+    final pos = edgeIndicatorPosition(size, point);
+    if (pos == null) return;
+    final dir = (point - size.center(Offset.zero));
+    final unit = dir / dir.distance;
+    final normal = Offset(-unit.dy, unit.dx);
+    const length = 12.0;
+    const halfWidth = 8.0;
+    final tip = pos + unit * length;
+    final path = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo((pos + normal * halfWidth).dx, (pos + normal * halfWidth).dy)
+      ..lineTo((pos - normal * halfWidth).dx, (pos - normal * halfWidth).dy)
+      ..close();
+    canvas.drawPath(path, Paint()..color = const Color(0xFFE53935));
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF2A0A0A)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
   }
 
   void _drawHpBar(Canvas canvas, Rect rect, double ratio) {
