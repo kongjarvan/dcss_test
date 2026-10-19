@@ -36,7 +36,7 @@ enum ActionCategory {
 enum DisabledReason {
   comingSoon('준비 중', Icons.lock_outline),
   enemyInSight('적이 보임', Icons.visibility),
-  hpFull('체력 가득', Icons.favorite);
+  fullyRested('회복 완료', Icons.favorite);
 
   const DisabledReason(this.label, this.icon);
 
@@ -91,12 +91,12 @@ List<GameActionButton> actionsFor(
           onPressed: controller.waitTurn,
         ),
         GameActionButton(
-          label: '휴식 (체력 완전 회복)',
+          label: '휴식 (HP·MP 완전 회복)',
           icon: Icons.hotel,
           onPressed: controller.canRest ? controller.rest : null,
           disabledReason: controller.enemyInSight
               ? DisabledReason.enemyInSight
-              : DisabledReason.hpFull,
+              : DisabledReason.fullyRested,
         ),
         GameActionButton(
           label: '자동 탐험',

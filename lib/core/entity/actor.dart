@@ -2,6 +2,7 @@ import '../geometry.dart';
 import '../progression/attribute_effects.dart';
 import '../progression/attributes.dart';
 import '../progression/experience.dart';
+import '../progression/species.dart';
 import '../time/energy.dart';
 import 'monster_type.dart';
 
@@ -57,10 +58,11 @@ abstract class Actor {
 }
 
 class Player extends Actor {
-  Player({required super.pos})
-    : super(
+  Player({required super.pos, this.species = Species.human})
+    : attributes = species.createAttributes(),
+      super(
         name: '당신',
-        maxHp: 30,
+        maxHp: baseHp,
         baseStats: const CombatStats(
           accuracy: 10,
           maxDamage: 6,
@@ -71,16 +73,36 @@ class Player extends Actor {
         attackDelay: 12,
       );
 
-  /// 이 시간(aut)이 지날 때마다 HP 1 회복.
-  static const autPerRegen = 60;
-  int regenProgress = 0;
+  /// 시작 HP / MP (종족 무관).
+  static const baseHp = 30;
+  static const baseMp = 5;
+
+  /// 민첩 10일 때 이 시간(aut)마다 HP 1 회복. 민첩이 높을수록 빨라진다.
+  static const baseAutPerHpRegen = 60;
+
+  /// 이 시간(aut)마다 MP 1 회복.
+  static const autPerMpRegen = 90;
+
+  int maxMp = baseMp;
+  int mp = baseMp;
+
+  int hpRegenProgress = 0;
+  int mpRegenProgress = 0;
+
+  int get autPerHpRegen =>
+      (baseAutPerHpRegen /
+              AttributeEffects.hpRegenMultiplier(
+                attributes[Attribute.dexterity],
+              ))
+          .round();
 
   int level = 1;
 
   /// 누적 경험치.
   int xp = 0;
 
-  final Attributes attributes = Attributes();
+  final Species species;
+  final Attributes attributes;
 
   /// 아직 투자하지 않은 능력치 포인트.
   int unspentStatPoints = 0;
@@ -102,9 +124,7 @@ class Player extends Actor {
     final gained = <int>[];
     while (!isMaxLevel && xp >= Experience.totalForLevel(level + 1)) {
       level++;
-      maxHp += Experience.hpPerLevel;
-      hp += Experience.hpPerLevel;
-      if (level % Experience.statPointInterval == 0) unspentStatPoints++;
+      unspentStatPoints += Experience.statPointsPerLevel;
       gained.add(level);
     }
     return gained;
@@ -115,6 +135,11 @@ class Player extends Actor {
     if (unspentStatPoints <= 0) return false;
     unspentStatPoints--;
     attributes.increase(attribute);
+    final gain = AttributeEffects.gainOnIncrease(attribute);
+    maxHp += gain.hp;
+    hp += gain.hp;
+    maxMp += gain.mp;
+    mp += gain.mp;
     return true;
   }
 

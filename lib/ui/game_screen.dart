@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/game.dart';
 import '../core/message_log.dart';
+import '../core/progression/species.dart';
 import '../core/time/energy.dart';
 import '../render/map_painter.dart';
 import '../render/map_zoom.dart';
@@ -9,29 +10,69 @@ import '../render/tile_renderer.dart';
 import 'action_bar.dart';
 import 'character_sheet.dart';
 import 'game_controller.dart';
+import 'species_select_screen.dart';
 
 String _turns(int aut) => (aut / autPerTurn).toStringAsFixed(1);
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, this.seed});
+  const GameScreen({
+    super.key,
+    this.seed,
+    this.species = Species.human,
+    this.controller,
+  });
 
   /// 고정 시드 (테스트/디버깅용). null이면 매번 새 던전.
   final int? seed;
+
+  final Species species;
+
+  /// 외부에서 만든 컨트롤러 (테스트용). null이면 직접 만든다.
+  final GameController? controller;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
 
 class _GameScreenState extends State<GameScreen> {
-  late final GameController _controller = GameController(seed: widget.seed);
+  late final GameController _controller =
+      widget.controller ??
+      GameController(seed: widget.seed, species: widget.species);
   static const _renderer = ProceduralTileRenderer();
 
   /// 맵 확대 배율. 1.0 = 시야 전체가 화면에 들어오는 크기.
   double _zoom = MapZoom.minZoom;
   double _zoomAtGestureStart = MapZoom.minZoom;
 
+  late int _lastLevel;
+  bool _sheetOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastLevel = _controller.game.player.level;
+    _controller.addListener(_onGameChanged);
+  }
+
+  /// 레벨이 오르면 능력치 선택 창을 띄운다. 닫고 나중에 골라도 된다.
+  void _onGameChanged() {
+    final player = _controller.game.player;
+    final leveledUp = player.level > _lastLevel;
+    _lastLevel = player.level;
+    if (!leveledUp || _sheetOpen || player.unspentStatPoints == 0) return;
+    _controller.stopTravel();
+    _sheetOpen = true;
+    // 빌드 중 알림일 수 있으므로 프레임이 끝난 뒤 연다.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showCharacterSheet(context, _controller, requireSpend: true);
+      _sheetOpen = false;
+    });
+  }
+
   @override
   void dispose() {
+    _controller.removeListener(_onGameChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -56,7 +97,10 @@ class _GameScreenState extends State<GameScreen> {
                   ],
                 ),
                 if (game.isGameOver)
-                  _GameOverOverlay(game: game, onRestart: _controller.newGame),
+                  _GameOverOverlay(
+                    game: game,
+                    onRestart: () => SpeciesSelectScreen.open(context),
+                  ),
               ],
             );
           },
@@ -83,7 +127,7 @@ class _GameScreenState extends State<GameScreen> {
         ],
       ),
     );
-    if (confirmed == true) _controller.newGame();
+    if (confirmed == true && mounted) SpeciesSelectScreen.open(context);
   }
 
   Widget _buildMap(Game game) {
@@ -182,32 +226,22 @@ class _StatusBar extends StatelessWidget {
               ),
             ],
           ),
-          Row(
-            children: [
-              SizedBox(
-                width: 84,
-                child: Text(
-                  'Lv ${player.level}',
-                  style: const TextStyle(
-                    color: Color(0xFF8FB8FF),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: LinearProgressIndicator(
-                    value: xpProgress(player),
-                    minHeight: 6,
-                    color: const Color(0xFF5B8DEF),
-                    backgroundColor: const Color(0xFF1C2433),
-                  ),
-                ),
-              ),
-              // 위 행의 새 게임 버튼 폭만큼 비워 두 바의 끝을 맞춘다.
-              const SizedBox(width: 40),
-            ],
+          _BarRow(
+            label: 'MP ${player.mp}/${player.maxMp}',
+            labelColor: const Color(0xFF8FB8FF),
+            value: player.maxMp == 0 ? 0 : player.mp / player.maxMp,
+            color: const Color(0xFF5B8DEF),
+            background: const Color(0xFF1C2433),
+            height: 8,
+          ),
+          const SizedBox(height: 4),
+          _BarRow(
+            label: 'Lv ${player.level}',
+            labelColor: const Color(0xFFD8B04A),
+            value: xpProgress(player),
+            color: const Color(0xFFD8B04A),
+            background: const Color(0xFF2E2614),
+            height: 5,
           ),
           const SizedBox(height: 6),
           Row(
@@ -221,6 +255,56 @@ class _StatusBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 상태바의 '라벨 + 막대' 한 줄. 첫 줄의 새 게임 버튼 폭만큼 오른쪽을 비워 막대 끝을 맞춘다.
+class _BarRow extends StatelessWidget {
+  const _BarRow({
+    required this.label,
+    required this.labelColor,
+    required this.value,
+    required this.color,
+    required this.background,
+    required this.height,
+  });
+
+  final String label;
+  final Color labelColor;
+  final double value;
+  final Color color;
+  final Color background;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 84,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: labelColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: value.clamp(0.0, 1.0),
+              minHeight: height,
+              color: color,
+              backgroundColor: background,
+            ),
+          ),
+        ),
+        const SizedBox(width: 40),
+      ],
     );
   }
 }

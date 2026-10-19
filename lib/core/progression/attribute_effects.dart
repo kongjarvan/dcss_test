@@ -17,7 +17,16 @@ abstract final class AttributeEffects {
   /// 방어구 이동속도 패널티: 1포인트당 -5% (힘 30이면 패널티 없음)
   static const armorPenaltyReductionPerPoint = 0.05;
 
+  // ── 능력치를 1 올릴 때 늘어나는 최대 HP / MP ──
+  static const strengthHpGain = 4;
+  static const dexterityHpGain = 2;
+  static const intelligenceHpGain = 1;
+  static const intelligenceMpGain = 3;
+
   // ── 민첩 ──
+  /// 체력 재생 속도: 1포인트당 +3%
+  static const hpRegenPerPoint = 0.03;
+
   /// 원거리 피해: 1포인트당 +3%
   static const rangedDamagePerPoint = 0.03;
 
@@ -45,6 +54,17 @@ abstract final class AttributeEffects {
 
   static int _delta(int value) => value - neutral;
 
+  /// [attribute]를 1 올릴 때 늘어나는 최대 HP / MP.
+  static ({int hp, int mp}) gainOnIncrease(Attribute attribute) =>
+      switch (attribute) {
+        Attribute.strength => (hp: strengthHpGain, mp: 0),
+        Attribute.dexterity => (hp: dexterityHpGain, mp: 0),
+        Attribute.intelligence => (
+          hp: intelligenceHpGain,
+          mp: intelligenceMpGain,
+        ),
+      };
+
   /// 1 + delta × rate, 단 [min] 미만으로는 내려가지 않음.
   static double _bonus(int value, double rate, {double min = 0.5}) =>
       math.max(min, 1 + _delta(value) * rate);
@@ -65,6 +85,9 @@ abstract final class AttributeEffects {
       (baseAut * armorPenaltyMultiplier(strength)).round();
 
   // ── 민첩 ──
+  static double hpRegenMultiplier(int dexterity) =>
+      _bonus(dexterity, hpRegenPerPoint);
+
   static double rangedDamageMultiplier(int dexterity) =>
       _bonus(dexterity, rangedDamagePerPoint);
 

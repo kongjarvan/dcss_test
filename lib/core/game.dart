@@ -9,8 +9,9 @@ import 'fov/shadowcasting.dart';
 import 'geometry.dart';
 import 'korean.dart';
 import 'message_log.dart';
+import 'progression/attribute_effects.dart';
 import 'progression/attributes.dart';
-import 'progression/experience.dart';
+import 'progression/species.dart';
 import 'time/energy.dart';
 import 'world/dungeon_generator.dart';
 import 'world/dungeon_map.dart';
@@ -26,10 +27,10 @@ class Game {
     updateFov();
   }
 
-  factory Game.newGame({int? seed}) {
+  factory Game.newGame({int? seed, Species species = Species.human}) {
     final rng = Random(seed ?? DateTime.now().microsecondsSinceEpoch);
     final level = DungeonGenerator(rng).generate();
-    final player = Player(pos: level.rooms.first.center);
+    final player = Player(pos: level.rooms.first.center, species: species);
     final monsters = <Monster>[];
 
     for (final room in level.rooms.skip(1)) {
@@ -135,15 +136,25 @@ class Game {
   }
 
   void _regenerate(int aut) {
-    if (player.hp >= player.maxHp) {
-      player.regenProgress = 0;
-      return;
+    final p = player;
+    if (p.hp >= p.maxHp) {
+      p.hpRegenProgress = 0;
+    } else {
+      p.hpRegenProgress += aut;
+      final step = p.autPerHpRegen;
+      while (p.hpRegenProgress >= step && p.hp < p.maxHp) {
+        p.hpRegenProgress -= step;
+        p.hp++;
+      }
     }
-    player.regenProgress += aut;
-    while (player.regenProgress >= Player.autPerRegen &&
-        player.hp < player.maxHp) {
-      player.regenProgress -= Player.autPerRegen;
-      player.hp++;
+    if (p.mp >= p.maxMp) {
+      p.mpRegenProgress = 0;
+    } else {
+      p.mpRegenProgress += aut;
+      while (p.mpRegenProgress >= Player.autPerMpRegen && p.mp < p.maxMp) {
+        p.mpRegenProgress -= Player.autPerMpRegen;
+        p.mp++;
+      }
     }
   }
 
@@ -170,18 +181,20 @@ class Game {
 
   void _grantXp(int amount) {
     for (final level in player.gainXp(amount)) {
-      message('레벨 업! 레벨 ${numberIGa(level)} 되었다.');
-      if (level % Experience.statPointInterval == 0) {
-        message('능력치를 올릴 수 있다. (적성 탭 → 캐릭터)');
-      }
+      message('레벨 업! 레벨 ${numberIGa(level)} 되었다. 능력치를 하나 올릴 수 있다.');
     }
   }
 
   /// 능력치 포인트 투자. 턴을 소모하지 않는다.
   bool increaseAttribute(Attribute attribute) {
     if (!player.spendStatPoint(attribute)) return false;
+    final gain = AttributeEffects.gainOnIncrease(attribute);
+    final bonus = [
+      if (gain.hp > 0) '최대 HP +${gain.hp}',
+      if (gain.mp > 0) '최대 MP +${gain.mp}',
+    ].join(', ');
     message(
-      '${iGa(attribute.label)} ${numberIGa(player.attributes[attribute])} 되었다.',
+      '${iGa(attribute.label)} ${numberIGa(player.attributes[attribute])} 되었다. ($bonus)',
     );
     return true;
   }

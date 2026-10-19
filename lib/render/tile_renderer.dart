@@ -3,13 +3,14 @@ import 'dart:ui';
 
 import '../core/entity/monster_type.dart';
 import '../core/geometry.dart';
+import '../core/progression/species.dart';
 import '../core/world/tile.dart';
 
 /// 타일 그래픽 출력 인터페이스.
 /// 나중에 스프라이트 시트 기반 구현으로 교체하면 나머지 코드는 그대로 쓸 수 있다.
 abstract class TileRenderer {
   void drawTile(Canvas canvas, Rect rect, TileType type, Pos pos);
-  void drawPlayer(Canvas canvas, Rect rect);
+  void drawPlayer(Canvas canvas, Rect rect, Species species);
   void drawMonster(Canvas canvas, Rect rect, MonsterType type);
 }
 
@@ -141,49 +142,93 @@ class ProceduralTileRenderer implements TileRenderer {
   }
 
   @override
-  void drawPlayer(Canvas c, Rect r) {
+  void drawPlayer(Canvas c, Rect r, Species species) {
     final w = r.width;
     final h = r.height;
     final cx = r.center.dx;
+    // 종족별 외형: 망토 색, 머리 높이(드워프는 땅딸막), 머리카락 색
+    final (cloak, hair, headY) = switch (species) {
+      Species.human => (const Color(0xFF3D6FD8), const Color(0xFF5A3A1E), 0.33),
+      Species.elf => (const Color(0xFF3E9A5A), const Color(0xFFE8D27A), 0.31),
+      Species.dwarf => (const Color(0xFFB0453A), const Color(0xFFB8642A), 0.42),
+    };
+    final shoulderY = headY + 0.13;
+    const skin = Color(0xFFE8C39E);
+    final head = Offset(cx, r.top + h * headY);
+
     _shadow(c, r);
-    // 검
-    c.drawLine(
-      Offset(cx + w * 0.27, r.top + h * 0.72),
-      Offset(cx + w * 0.38, r.top + h * 0.22),
-      _stroke(const Color(0xFFD7DDE6), w * 0.05),
-    );
-    c.drawLine(
-      Offset(cx + w * 0.2, r.top + h * 0.68),
-      Offset(cx + w * 0.34, r.top + h * 0.72),
-      _stroke(const Color(0xFF8A6A30), w * 0.05),
-    );
-    // 몸통 (망토)
+    // 무기: 드워프는 도끼, 나머지는 검
+    if (species == Species.dwarf) {
+      c.drawLine(
+        Offset(cx + w * 0.3, r.top + h * 0.8),
+        Offset(cx + w * 0.3, r.top + h * 0.35),
+        _stroke(const Color(0xFF8A6A30), w * 0.05),
+      );
+      final blade = Path()
+        ..moveTo(cx + w * 0.3, r.top + h * 0.36)
+        ..lineTo(cx + w * 0.44, r.top + h * 0.3)
+        ..lineTo(cx + w * 0.44, r.top + h * 0.5)
+        ..lineTo(cx + w * 0.3, r.top + h * 0.46)
+        ..close();
+      c.drawPath(blade, _fill(const Color(0xFFD7DDE6)));
+    } else {
+      c.drawLine(
+        Offset(cx + w * 0.27, r.top + h * 0.72),
+        Offset(cx + w * 0.38, r.top + h * 0.22),
+        _stroke(const Color(0xFFD7DDE6), w * 0.05),
+      );
+      c.drawLine(
+        Offset(cx + w * 0.2, r.top + h * 0.68),
+        Offset(cx + w * 0.34, r.top + h * 0.72),
+        _stroke(const Color(0xFF8A6A30), w * 0.05),
+      );
+    }
+    // 몸통 (망토). 드워프는 어깨가 넓다.
+    final shoulder = species == Species.dwarf ? 0.2 : 0.15;
     final body = Path()
       ..moveTo(cx - w * 0.24, r.top + h * 0.86)
       ..lineTo(cx + w * 0.24, r.top + h * 0.86)
-      ..lineTo(cx + w * 0.15, r.top + h * 0.46)
-      ..lineTo(cx - w * 0.15, r.top + h * 0.46)
+      ..lineTo(cx + w * shoulder, r.top + h * shoulderY)
+      ..lineTo(cx - w * shoulder, r.top + h * shoulderY)
       ..close();
-    c.drawPath(body, _fill(const Color(0xFF3D6FD8)));
+    c.drawPath(body, _fill(cloak));
     c.drawLine(
-      Offset(cx - w * 0.17, r.top + h * 0.62),
-      Offset(cx + w * 0.17, r.top + h * 0.62),
+      Offset(cx - w * 0.18, r.top + h * 0.68),
+      Offset(cx + w * 0.18, r.top + h * 0.68),
       _stroke(const Color(0xFF7A5A2A), w * 0.05),
     );
+    // 엘프 귀
+    if (species == Species.elf) {
+      final ears = Path()
+        ..moveTo(cx - w * 0.1, head.dy - h * 0.01)
+        ..lineTo(cx - w * 0.24, head.dy - h * 0.08)
+        ..lineTo(cx - w * 0.11, head.dy + h * 0.05)
+        ..close()
+        ..moveTo(cx + w * 0.1, head.dy - h * 0.01)
+        ..lineTo(cx + w * 0.24, head.dy - h * 0.08)
+        ..lineTo(cx + w * 0.11, head.dy + h * 0.05)
+        ..close();
+      c.drawPath(ears, _fill(skin));
+    }
     // 머리
-    c.drawCircle(
-      Offset(cx, r.top + h * 0.33),
-      w * 0.13,
-      _fill(const Color(0xFFE8C39E)),
-    );
+    c.drawCircle(head, w * 0.13, _fill(skin));
     // 머리카락
     c.drawArc(
-      Rect.fromCircle(center: Offset(cx, r.top + h * 0.33), radius: w * 0.135),
+      Rect.fromCircle(center: head, radius: w * 0.135),
       math.pi,
       math.pi,
       true,
-      _fill(const Color(0xFF5A3A1E)),
+      _fill(hair),
     );
+    // 드워프 수염
+    if (species == Species.dwarf) {
+      final beard = Path()
+        ..moveTo(cx - w * 0.13, head.dy + h * 0.06)
+        ..lineTo(cx + w * 0.13, head.dy + h * 0.06)
+        ..lineTo(cx, head.dy + h * 0.25)
+        ..close();
+      c.drawPath(beard, _fill(hair));
+    }
   }
 
   @override

@@ -5,11 +5,9 @@ abstract final class Experience {
   /// DCSS와 같은 최대 레벨.
   static const maxLevel = 27;
 
-  /// 레벨업마다 늘어나는 최대 HP. (임시값 — 능력치 효과가 정해지면 바뀔 수 있음)
-  static const hpPerLevel = 4;
-
-  /// 이 레벨 간격마다 능력치 포인트 1개 (3, 6, 9, … 레벨).
-  static const statPointInterval = 3;
+  /// 레벨업마다 받는 능력치 포인트. 최대 HP/MP는 포인트를 투자할 때 늘어난다
+  /// ([AttributeEffects.gainOnIncrease]).
+  static const statPointsPerLevel = 1;
 
   /// [level]에 도달하는 데 필요한 누적 경험치.
   /// 2레벨 10, 3레벨 57, 5레벨 320, 10레벨 2430, 27레벨 약 34000.

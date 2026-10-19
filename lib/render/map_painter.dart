@@ -89,7 +89,7 @@ class MapPainter extends CustomPainter {
     }
 
     if (game.player.isAlive) {
-      renderer.drawPlayer(canvas, rectOf(game.player.pos));
+      renderer.drawPlayer(canvas, rectOf(game.player.pos), game.player.species);
     }
 
     for (final point in offscreen) {

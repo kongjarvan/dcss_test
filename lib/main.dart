@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/progression/species.dart';
 import 'ui/game_screen.dart';
+import 'ui/species_select_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,9 +12,12 @@ void main() {
 }
 
 class DungeonApp extends StatelessWidget {
-  const DungeonApp({super.key, this.seed});
+  const DungeonApp({super.key, this.seed, this.species});
 
   final int? seed;
+
+  /// 지정하면 종족 선택을 건너뛰고 바로 게임을 시작한다 (테스트용).
+  final Species? species;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +30,9 @@ class DungeonApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: GameScreen(seed: seed),
+      home: species == null
+          ? SpeciesSelectScreen(seed: seed)
+          : GameScreen(seed: seed, species: species!),
     );
   }
 }

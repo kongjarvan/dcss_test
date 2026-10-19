@@ -6,6 +6,7 @@ import '../core/action/action.dart';
 import '../core/game.dart';
 import '../core/geometry.dart';
 import '../core/progression/attributes.dart';
+import '../core/progression/species.dart';
 
 /// 자동 이동 종류.
 enum AutoMoveMode {
@@ -21,12 +22,13 @@ enum AutoMoveMode {
 
 /// 입력(탭, 버튼)을 게임 행동으로 바꾸고 화면 갱신을 알린다.
 class GameController extends ChangeNotifier {
-  GameController({int? seed}) : _game = Game.newGame(seed: seed);
+  GameController({int? seed, Species species = Species.human})
+    : _game = Game.newGame(seed: seed, species: species);
 
   static const _autoMoveInterval = Duration(milliseconds: 70);
   static const _restInterval = Duration(milliseconds: 20);
 
-  Game _game;
+  final Game _game;
   Game get game => _game;
 
   Timer? _autoMoveTimer;
@@ -41,7 +43,11 @@ class GameController extends ChangeNotifier {
   AutoMoveMode? get autoMoveMode => _autoMoveMode;
 
   bool get enemyInSight => _game.visibleMonsters.isNotEmpty;
-  bool get isHpFull => _game.player.hp >= _game.player.maxHp;
+
+  /// HP와 MP가 모두 가득한지.
+  bool get isFullyRested =>
+      _game.player.hp >= _game.player.maxHp &&
+      _game.player.mp >= _game.player.maxMp;
 
   /// 자동 탐험 버튼 사용 가능 여부.
   bool get canExplore => !_game.isGameOver && !enemyInSight;
@@ -50,13 +56,7 @@ class GameController extends ChangeNotifier {
   bool get hasStatPoints => _game.player.unspentStatPoints > 0;
 
   /// 휴식 버튼 사용 가능 여부.
-  bool get canRest => !_game.isGameOver && !enemyInSight && !isHpFull;
-
-  void newGame() {
-    _stopAutoMove();
-    _game = Game.newGame();
-    notifyListeners();
-  }
+  bool get canRest => !_game.isGameOver && !enemyInSight && !isFullyRested;
 
   /// 맵의 한 칸을 탭했을 때.
   /// - 자기 자신: 1턴 대기
@@ -100,7 +100,7 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// HP가 가득 찰 때까지 1턴씩 대기한다.
+  /// HP와 MP가 가득 찰 때까지 1턴씩 대기한다.
   void rest() {
     if (isTraveling || !canRest) return;
     _restStartTime = _game.time;
@@ -114,8 +114,8 @@ class GameController extends ChangeNotifier {
     _game.playerAct(const WaitAction());
     // 상단의 '직전 행동'에 휴식 전체 시간을 표시.
     _game.lastActionCost = _game.time - _restStartTime;
-    if (isHpFull) {
-      _game.message('휴식을 마쳤다. 체력이 모두 회복되었다.');
+    if (isFullyRested) {
+      _game.message('휴식을 마쳤다. HP와 MP가 모두 회복되었다.');
       _stopAutoMove();
     } else if (enemyInSight || _game.player.hp < hpBefore) {
       _stopAutoMove();

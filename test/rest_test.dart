@@ -28,7 +28,7 @@ void main() {
     expect(c.isTraveling, isFalse);
     expect(game.player.hp, game.player.maxHp);
     // 25 HP × 60 aut = 1500 aut
-    expect(game.time, 25 * Player.autPerRegen);
+    expect(game.time, 25 * Player.baseAutPerHpRegen);
     expect(game.lastActionCost, game.time);
     expect(c.canRest, isFalse); // 체력 가득
     c.dispose();
