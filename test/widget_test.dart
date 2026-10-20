@@ -34,7 +34,7 @@ void main() {
 
     await tester.tap(find.byTooltip('아이템'));
     await tester.pump();
-    expect(buttonByTooltip(tester, '줍기 · 준비 중').onPressed, isNull);
+    expect(buttonByTooltip(tester, '줍기 · 주울 것 없음').onPressed, isNull);
 
     await tester.tap(find.byTooltip('적성'));
     await tester.pump();

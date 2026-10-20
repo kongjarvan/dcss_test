@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 
 import '../core/action/action.dart';
 import '../core/game.dart';
+import '../core/entity/actor.dart';
 import '../core/geometry.dart';
+import '../core/items/item.dart';
 import '../core/progression/attributes.dart';
 import '../core/progression/job.dart';
 import '../core/progression/skills.dart';
@@ -75,10 +77,20 @@ class GameController extends ChangeNotifier {
       _game.playerAct(const WaitAction());
     } else if (target.isAdjacentTo(here)) {
       _game.playerAct(MoveAction(target - here));
+    } else if (_reachableMonsterAt(target) case final monster?) {
+      // 장병기: 2칸 떨어진 몬스터를 탭하면 그 자리에서 찌른다.
+      _game.playerAct(ReachAttackAction(monster));
     } else {
       _startTravel(target);
     }
     notifyListeners();
+  }
+
+  Monster? _reachableMonsterAt(Pos p) {
+    final actor = _game.actorAt(p);
+    return actor is Monster && _game.map.isVisible(p) && _game.canReach(actor)
+        ? actor
+        : null;
   }
 
   void waitTurn() {
@@ -94,6 +106,33 @@ class GameController extends ChangeNotifier {
   /// 숙련도 훈련 켜기/끄기. 턴을 소모하지 않는다.
   void setSkillTraining(Skill skill, bool training) {
     _game.player.skills.setTraining(skill, training);
+    notifyListeners();
+  }
+
+  // ── 아이템 / 장비 ──
+  bool get canPickUp =>
+      !_game.isGameOver && _game.itemsAt(_game.player.pos).isNotEmpty;
+
+  void pickUp() => _act(const PickUpAction());
+  void equip(Item item) => _act(EquipAction(item));
+  void unequip(EquipSlot slot) => _act(UnequipAction(slot));
+  void drop(Item item) => _act(DropAction(item));
+
+  // ── 원거리 ──
+  bool get hasLauncher => _game.player.launcher != null;
+
+  /// 활로 쏠 수 있는 가장 가까운 적.
+  Monster? get rangedTarget => _game.rangedTarget();
+
+  void fireRanged() {
+    final target = rangedTarget;
+    if (target == null) return;
+    _act(RangedAttackAction(target));
+  }
+
+  void _act(Action action) {
+    if (_game.isGameOver) return;
+    _game.playerAct(action);
     notifyListeners();
   }
 
@@ -185,7 +224,7 @@ class GameController extends ChangeNotifier {
       final target = _travelTarget;
       if (target == null ||
           target == _game.player.pos ||
-          !_game.isExploreFrontier(target)) {
+          !_game.isExploreGoal(target)) {
         final next = _game.exploreTarget();
         if (next == null) {
           _game.message('탐험을 마쳤다.');
@@ -216,8 +255,11 @@ class GameController extends ChangeNotifier {
 
     final arrived =
         _autoMoveMode == AutoMoveMode.travel && _game.player.pos == dest;
+    // 처음 보는 아이템 위에 올라서면 멈춰서 주울지 고를 수 있게 한다.
+    final onItems = _game.newItemsUnderfoot;
     if (!acted ||
         arrived ||
+        onItems ||
         _game.visibleMonsters.isNotEmpty ||
         _game.player.hp < hpBefore) {
       _stopAutoMove();

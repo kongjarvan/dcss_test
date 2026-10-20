@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import '../geometry.dart';
+import '../items/item.dart';
 import '../progression/attribute_effects.dart';
 import '../progression/attributes.dart';
 import '../progression/experience.dart';
 import '../progression/job.dart';
+import '../progression/skill_effects.dart';
 import '../progression/skills.dart';
 import '../progression/species.dart';
 import '../time/energy.dart';
@@ -52,8 +56,14 @@ abstract class Actor {
   /// 이동 1칸에 드는 시간 (aut).
   int moveDelay;
 
-  /// 공격 1회에 드는 시간 (aut). 무기에 따라 달라진다.
+  /// 맨손(또는 몬스터 기본) 공격 1회에 드는 시간 (aut).
   int attackDelay;
+
+  /// 실제 근접 공격 1회 시간 (aut). 플레이어는 무기·숙련도에 따라 달라진다.
+  int get meleeDelay => attackDelay;
+
+  /// 받은 공격을 막을 확률 (0~1).
+  double get blockChance => 0;
 
   bool get isAlive => hp > 0;
   bool get isPlayer;
@@ -69,15 +79,69 @@ class Player extends Actor {
       super(
         name: '당신',
         maxHp: baseHp,
-        baseStats: const CombatStats(
-          accuracy: 10,
-          maxDamage: 6,
-          evasion: 5,
-          armor: 1,
-        ),
-        // 임시 무기: 숏소드 (공격 1.2턴)
-        attackDelay: 12,
-      );
+        // 맨손 기준 수치. 무기·갑옷은 [stats]에서 더한다.
+        baseStats: const CombatStats(accuracy: 10, maxDamage: 3, evasion: 5),
+      ) {
+    for (final type in job?.startingItems ?? const <ItemType>[]) {
+      final item = Item(type);
+      inventory.add(item);
+      equip(item);
+    }
+  }
+
+  // ── 소지품 / 장비 ──
+  static const inventoryCapacity = 20;
+
+  final List<Item> inventory = [];
+  final Map<EquipSlot, Item> _equipped = {};
+
+  Item? equipped(EquipSlot slot) => _equipped[slot];
+  bool isEquipped(Item item) => _equipped[item.type.slot] == item;
+  bool get isInventoryFull => inventory.length >= inventoryCapacity;
+
+  WeaponType? get weaponType =>
+      _equipped[EquipSlot.weapon]?.type as WeaponType?;
+  ArmourType? get armourType =>
+      _equipped[EquipSlot.armour]?.type as ArmourType?;
+  ShieldType? get shieldType =>
+      _equipped[EquipSlot.shield]?.type as ShieldType?;
+
+  /// 근접 공격에 쓰는 무기. 활은 근접에 못 쓰므로 맨손(null).
+  WeaponType? get meleeWeapon => weaponType?.ranged == true ? null : weaponType;
+
+  /// 근접 공격이 닿는 거리 (맨손·일반 무기 1, 장병기 2).
+  int get reach => meleeWeapon?.reach ?? 1;
+
+  /// 장착한 활. 없으면 null.
+  WeaponType? get launcher => weaponType?.ranged == true ? weaponType : null;
+
+  /// [item]을 장착할 수 없는 이유. 장착 가능하면 null.
+  String? equipProblem(Item item) {
+    final type = item.type;
+    if (type is WeaponType && type.twoHanded && shieldType != null) {
+      return '양손 무기를 들려면 먼저 방패를 벗어야 한다.';
+    }
+    if (type is ShieldType && weaponType?.twoHanded == true) {
+      return '양손 무기를 든 채로는 방패를 들 수 없다.';
+    }
+    return null;
+  }
+
+  /// 같은 부위의 장비는 바꿔 낀다. 소지품에 있는 아이템이어야 한다.
+  void equip(Item item) {
+    assert(inventory.contains(item));
+    _equipped[item.type.slot] = item;
+  }
+
+  Item? unequip(EquipSlot slot) => _equipped.remove(slot);
+
+  int get _encumbrance =>
+      (armourType?.encumbrance ?? 0) + (shieldType?.encumbrance ?? 0);
+
+  int _skill(Skill skill) => skills.level(skill);
+
+  /// 근접 무기(없으면 맨손격투) 숙련도.
+  int get _meleeSkill => _skill(meleeWeapon?.skill ?? Skill.unarmed);
 
   /// 시작 HP / MP (종족 무관).
   static const baseHp = 30;
@@ -147,14 +211,84 @@ class Player extends Actor {
 
   bool get isMaxLevel => level >= Experience.maxLevel;
 
-  /// 민첩 → 명중·회피
+  /// 근접 전투 수치 = 기본 + 민첩 + 무기 + 갑옷 + 숙련도.
   @override
-  CombatStats get stats => AttributeEffects.applyTo(baseStats, attributes);
+  CombatStats get stats {
+    final s = AttributeEffects.applyTo(baseStats, attributes);
+    final weapon = meleeWeapon;
+    final armour = armourType;
+    return CombatStats(
+      accuracy: math.max(
+        1,
+        s.accuracy +
+            (weapon?.accuracy ?? 0) +
+            SkillEffects.weaponAccuracy(_meleeSkill),
+      ),
+      maxDamage:
+          weapon?.damage ??
+          s.maxDamage + SkillEffects.unarmedDamageBonus(_meleeSkill),
+      evasion: math.max(
+        0,
+        s.evasion +
+            SkillEffects.dodgingBonus(_skill(Skill.dodging)) -
+            armourEvasionPenalty,
+      ),
+      armor:
+          s.armor +
+          (armour == null
+              ? 0
+              : SkillEffects.armourAc(armour.ac, _skill(Skill.armour))),
+    );
+  }
 
-  /// 힘 → 근접 피해
+  /// 힘 × 무기 숙련도 → 근접 피해
   @override
   double get meleeDamageMultiplier =>
-      AttributeEffects.meleeDamageMultiplier(attributes[Attribute.strength]);
+      AttributeEffects.meleeDamageMultiplier(attributes[Attribute.strength]) *
+      SkillEffects.weaponDamageMultiplier(_meleeSkill);
+
+  @override
+  int get meleeDelay =>
+      SkillEffects.attackDelay(meleeWeapon?.delay ?? attackDelay, _meleeSkill);
+
+  /// 갑옷·방패 무게로 인한 회피 감소. 힘이 높을수록 덜 줄어든다.
+  int get armourEvasionPenalty => AttributeEffects.armourEvasionPenalty(
+    SkillEffects.encumbranceEvasionPenalty(_encumbrance),
+    attributes[Attribute.strength],
+  );
+
+  @override
+  double get blockChance =>
+      SkillEffects.blockChance(shieldType?.block ?? 0, _skill(Skill.shield));
+
+  // ── 원거리 (활) ──
+  /// 원거리 전투 수치. 활이 없으면 null.
+  CombatStats? get rangedStats {
+    final bow = launcher;
+    if (bow == null) return null;
+    final s = stats;
+    return CombatStats(
+      accuracy: math.max(
+        1,
+        AttributeEffects.applyTo(baseStats, attributes).accuracy +
+            bow.accuracy +
+            SkillEffects.weaponAccuracy(_skill(bow.skill)),
+      ),
+      maxDamage: bow.damage,
+      evasion: s.evasion,
+      armor: s.armor,
+    );
+  }
+
+  /// 민첩 × 활 숙련도 → 원거리 피해
+  double get rangedDamageMultiplier =>
+      AttributeEffects.rangedDamageMultiplier(attributes[Attribute.dexterity]) *
+      SkillEffects.weaponDamageMultiplier(_skill(launcher?.skill ?? Skill.bow));
+
+  int get rangedDelay => SkillEffects.attackDelay(
+    launcher?.delay ?? attackDelay,
+    _skill(launcher?.skill ?? Skill.bow),
+  );
 
   /// 경험치를 얻고, 레벨이 오르면 오른 레벨들을 순서대로 반환한다.
   List<int> gainXp(int amount) {

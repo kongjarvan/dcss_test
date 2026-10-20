@@ -14,7 +14,7 @@ abstract final class AttributeEffects {
   /// 근접 피해: 1포인트당 +3%
   static const meleeDamagePerPoint = 0.03;
 
-  /// 방어구 이동속도 패널티: 1포인트당 -5% (힘 30이면 패널티 없음)
+  /// 방어구 회피 패널티: 1포인트당 -5% (힘 30이면 패널티 없음)
   static const armorPenaltyReductionPerPoint = 0.05;
 
   // ── 능력치를 1 올릴 때 늘어나는 최대 HP / MP ──
@@ -92,9 +92,9 @@ abstract final class AttributeEffects {
   static double armorPenaltyMultiplier(int strength) =>
       _reduction(strength, armorPenaltyReductionPerPoint, min: 0);
 
-  /// 방어구 무게로 인한 이동 지연(aut)에 힘을 반영한 값.
-  static int armorMovePenalty(int baseAut, int strength) =>
-      (baseAut * armorPenaltyMultiplier(strength)).round();
+  /// 갑옷·방패 무게로 인한 회피 감소에 힘을 반영한 값.
+  static int armourEvasionPenalty(int basePenalty, int strength) =>
+      (basePenalty * armorPenaltyMultiplier(strength)).round();
 
   // ── 민첩 ──
   static double hpRegenMultiplier(int dexterity) =>

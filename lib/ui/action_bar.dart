@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'character_sheet.dart';
 import 'game_controller.dart';
+import 'inventory_screen.dart';
 import 'skills_screen.dart';
 
 /// 알림 점 (확인할 것이 있음).
@@ -37,7 +38,10 @@ enum ActionCategory {
 enum DisabledReason {
   comingSoon('준비 중', Icons.lock_outline),
   enemyInSight('적이 보임', Icons.visibility),
-  fullyRested('회복 완료', Icons.favorite);
+  fullyRested('회복 완료', Icons.favorite),
+  noItems('주울 것 없음', Icons.block),
+  noLauncher('활 필요', Icons.do_not_disturb_on),
+  noTarget('대상 없음', Icons.location_disabled);
 
   const DisabledReason(this.label, this.icon);
 
@@ -83,6 +87,8 @@ List<GameActionButton> actionsFor(
   GameController controller, {
   required VoidCallback openCharacterSheet,
   required VoidCallback openSkills,
+  required VoidCallback openInventory,
+  required VoidCallback openEquipment,
 }) {
   switch (category) {
     case ActionCategory.movement:
@@ -119,16 +125,36 @@ List<GameActionButton> actionsFor(
           icon: Icons.hourglass_empty,
           onPressed: controller.waitTurn,
         ),
-        const GameActionButton.comingSoon(
+        GameActionButton(
           label: '원거리 공격',
           icon: Icons.ads_click,
+          onPressed: controller.rangedTarget != null
+              ? controller.fireRanged
+              : null,
+          disabledReason: controller.hasLauncher
+              ? DisabledReason.noTarget
+              : DisabledReason.noLauncher,
         ),
       ];
     case ActionCategory.item:
-      return const [
-        GameActionButton.comingSoon(label: '줍기', icon: Icons.pan_tool),
-        GameActionButton.comingSoon(label: '소지품', icon: Icons.inventory_2),
-        GameActionButton.comingSoon(label: '장비', icon: Icons.shield),
+      return [
+        GameActionButton(
+          label: '줍기',
+          icon: Icons.pan_tool,
+          onPressed: controller.canPickUp ? controller.pickUp : null,
+          disabledReason: DisabledReason.noItems,
+          highlight: controller.canPickUp,
+        ),
+        GameActionButton(
+          label: '소지품',
+          icon: Icons.inventory_2,
+          onPressed: openInventory,
+        ),
+        GameActionButton(
+          label: '장비',
+          icon: Icons.shield,
+          onPressed: openEquipment,
+        ),
       ];
     case ActionCategory.skill:
       return [
@@ -179,8 +205,12 @@ class _ActionBarState extends State<ActionBar> {
                   child: _CategoryTab(
                     category: c,
                     selected: c == _category,
-                    highlight:
-                        c == ActionCategory.skill && controller.hasStatPoints,
+                    // 확인할 것이 있는 탭에 노란 점: 남은 능력치 포인트, 발밑 아이템
+                    highlight: switch (c) {
+                      ActionCategory.skill => controller.hasStatPoints,
+                      ActionCategory.item => controller.canPickUp,
+                      _ => false,
+                    },
                     onTap: () => setState(() => _category = c),
                   ),
                 ),
@@ -201,6 +231,10 @@ class _ActionBarState extends State<ActionBar> {
                             showCharacterSheet(context, controller),
                         openSkills: () =>
                             SkillsScreen.open(context, controller),
+                        openInventory: () =>
+                            InventoryScreen.open(context, controller),
+                        openEquipment: () =>
+                            EquipmentScreen.open(context, controller),
                       ).indexed) ...[
                         if (i > 0) const SizedBox(width: 6),
                         Expanded(child: _ActionButton(action: action)),

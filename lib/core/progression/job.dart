@@ -1,3 +1,4 @@
+import '../items/item.dart';
 import 'attributes.dart';
 import 'skills.dart';
 import 'species.dart';
@@ -18,6 +19,11 @@ enum Job {
       Skill.shield: 2,
       Skill.dodging: 1,
     },
+    startingItems: [
+      ItemTypes.shortSword,
+      ItemTypes.leatherArmour,
+      ItemTypes.buckler,
+    ],
   ),
   wizard(
     name: '마법사',
@@ -30,6 +36,7 @@ enum Job {
       Skill.dodging: 2,
       Skill.stealth: 1,
     },
+    startingItems: [ItemTypes.robe],
   ),
   hunter(
     name: '사냥꾼',
@@ -41,6 +48,7 @@ enum Job {
       Skill.dodging: 2,
       Skill.stealth: 2,
     },
+    startingItems: [ItemTypes.shortbow, ItemTypes.leatherArmour],
   );
 
   const Job({
@@ -48,6 +56,7 @@ enum Job {
     required this.description,
     required this.adjustments,
     required this.startingSkills,
+    required this.startingItems,
   });
 
   final String name;
@@ -60,6 +69,9 @@ enum Job {
 
   /// 시작 숙련도 레벨. 시작 시 이 숙련도들이 훈련 중으로 켜진다.
   final Map<Skill, int> startingSkills;
+
+  /// 시작 장비. 시작 시 모두 장착한다.
+  final List<ItemType> startingItems;
 }
 
 /// [species] 기본 능력치에 [job] 보정치를 더한 시작 능력치.

@@ -15,6 +15,20 @@ int runAutoMove(GameController c, {int maxSteps = 5000}) {
   return steps;
 }
 
+/// 아이템 위에서 멈추면 다시 탐험을 누르며, 탐험이 끝나거나 [stopWhen]이 참일 때까지 진행.
+/// 아이템에서 멈춘 횟수를 반환.
+int exploreFully(GameController c, {bool Function()? stopWhen}) {
+  var itemStops = 0;
+  for (var i = 0; i < 200; i++) {
+    c.explore();
+    if (!c.isTraveling) break;
+    runAutoMove(c);
+    if (stopWhen?.call() ?? false) break;
+    if (c.game.itemsAt(c.game.player.pos).isNotEmpty) itemStops++;
+  }
+  return itemStops;
+}
+
 void main() {
   test('몬스터가 없으면 맵 전체를 탐험하고 끝난다', () {
     for (final seed in [1, 2, 3, 4, 5]) {
@@ -23,11 +37,10 @@ void main() {
       game.monsters.clear();
       game.updateFov();
 
-      c.explore();
-      expect(c.isTraveling, isTrue, reason: 'seed $seed');
-      runAutoMove(c);
+      final itemStops = exploreFully(c);
       expect(c.isTraveling, isFalse, reason: 'seed $seed: 끝나지 않음');
-      expect(game.log.recent(1).single.text, '탐험을 마쳤다.');
+      // 바닥 아이템마다 한 번씩 멈춘다.
+      expect(itemStops, game.itemPositions.length, reason: 'seed $seed');
 
       // 도달 가능한 모든 바닥/문 칸을 봤어야 한다.
       final map = game.map;
@@ -41,7 +54,7 @@ void main() {
       }
       expect(game.exploreTarget(), isNull);
 
-      // 다시 누르면 탐험할 곳이 없다는 메시지.
+      // 다 끝났으면 탐험할 곳이 없다는 메시지.
       c.explore();
       expect(c.isTraveling, isFalse);
       expect(game.log.recent(1).single.text, '더 탐험할 곳이 없다.');
@@ -83,8 +96,7 @@ void main() {
     game.updateFov();
     expect(c.canExplore, isTrue);
 
-    c.explore();
-    runAutoMove(c);
+    exploreFully(c, stopWhen: () => game.visibleMonsters.isNotEmpty);
     expect(c.isTraveling, isFalse);
     expect(game.visibleMonsters, isNotEmpty);
     expect(c.canExplore, isFalse);

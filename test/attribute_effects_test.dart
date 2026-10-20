@@ -35,11 +35,11 @@ void main() {
       expect(E.meleeDamageMultiplier(20), closeTo(1.30, 1e-9));
     });
 
-    test('방어구 이동 패널티: 힘 20이면 절반, 30 이상이면 없음', () {
-      expect(E.armorMovePenalty(4, 20), 2);
-      expect(E.armorMovePenalty(4, 30), 0);
-      expect(E.armorMovePenalty(4, 40), 0);
-      expect(E.armorMovePenalty(4, 10), 4);
+    test('방어구 회피 패널티: 힘 20이면 절반, 30 이상이면 없음', () {
+      expect(E.armourEvasionPenalty(4, 20), 2);
+      expect(E.armourEvasionPenalty(4, 30), 0);
+      expect(E.armourEvasionPenalty(4, 40), 0);
+      expect(E.armourEvasionPenalty(4, 10), 4);
     });
   });
 

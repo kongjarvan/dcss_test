@@ -169,7 +169,7 @@ List<AttributeEffectLine> attributeEffectLines(Attribute attribute, int value) {
     case Attribute.strength:
       return [
         (label: '근접 피해', value: _percent(AttributeEffects.meleeDamageMultiplier(value)), active: true),
-        (label: '방어구 이동 패널티', value: _percent(AttributeEffects.armorPenaltyMultiplier(value)), active: false),
+        (label: '방어구 회피 패널티', value: _percent(AttributeEffects.armorPenaltyMultiplier(value)), active: true),
       ];
     case Attribute.dexterity:
       return [

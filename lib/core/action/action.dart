@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../entity/actor.dart';
 import '../game.dart';
+import '../items/item.dart';
 import '../geometry.dart';
 import '../korean.dart';
 import '../time/energy.dart';
@@ -102,13 +103,15 @@ class AttackAction extends Action {
     final hit = rng.nextInt(a.accuracy + d.evasion) < a.accuracy;
     if (!hit) {
       game.message('$subject$object 공격했지만 빗나갔다.');
+    } else if (_blocked(target, rng)) {
+      game.message('$subject$object 공격했지만 방패에 막혔다.');
     } else {
-      final roll = _scale(
-        1 + rng.nextInt(a.maxDamage),
-        attacker.meleeDamageMultiplier,
+      final damage = rollDamage(
         rng,
+        a.maxDamage,
+        attacker.meleeDamageMultiplier,
+        d.armor,
       );
-      final damage = max(0, roll - rng.nextInt(d.armor + 1));
       if (damage == 0) {
         game.message('$subject$object 공격했지만 피해를 주지 못했다.');
       } else {
@@ -117,15 +120,190 @@ class AttackAction extends Action {
         if (!target.isAlive) game.onActorDied(target, attacker);
       }
     }
-    return ActionResult.success(attacker.attackDelay);
+    return ActionResult.success(attacker.meleeDelay);
   }
+}
 
-  /// [value] × [multiplier]를 확률적으로 반올림한다.
-  /// 예) 4 × 1.15 = 4.6 → 60% 확률로 5, 40% 확률로 4. 기대값이 정확히 유지된다.
-  static int _scale(int value, double multiplier, Random rng) {
-    if (multiplier == 1.0) return value;
-    final scaled = value * multiplier;
-    final whole = scaled.floor();
-    return whole + (rng.nextDouble() < scaled - whole ? 1 : 0);
+/// 장병기로 2칸 떨어진 [target]을 찌른다. 계산은 일반 근접 공격과 같다.
+class ReachAttackAction extends Action {
+  const ReachAttackAction(this.target);
+
+  final Actor target;
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player || !game.canReach(target)) {
+      return ActionResult.failure;
+    }
+    return AttackAction(target).perform(game, actor);
+  }
+}
+
+/// [target]이 방패로 공격을 막았는지.
+bool _blocked(Actor target, Random rng) {
+  final chance = target.blockChance;
+  return chance > 0 && rng.nextDouble() < chance;
+}
+
+/// 피해 굴림: 1~[maxDamage] × [multiplier] − 0~[armor].
+int rollDamage(Random rng, int maxDamage, double multiplier, int armor) {
+  final roll = _scale(1 + rng.nextInt(maxDamage), multiplier, rng);
+  return max(0, roll - rng.nextInt(armor + 1));
+}
+
+/// [value] × [multiplier]를 확률적으로 반올림한다.
+/// 예) 4 × 1.15 = 4.6 → 60% 확률로 5, 40% 확률로 4. 기대값이 정확히 유지된다.
+int _scale(int value, double multiplier, Random rng) {
+  if (multiplier == 1.0) return value;
+  final scaled = value * multiplier;
+  final whole = scaled.floor();
+  return whole + (rng.nextDouble() < scaled - whole ? 1 : 0);
+}
+
+/// 활로 [target]을 쏜다. 사이에 벽이나 다른 몬스터가 있으면 쏠 수 없다.
+class RangedAttackAction extends Action {
+  const RangedAttackAction(this.target);
+
+  final Actor target;
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player) return ActionResult.failure;
+    final a = actor.rangedStats;
+    if (a == null) return ActionResult.failure;
+    if (!target.isAlive || !game.hasLineOfFire(actor.pos, target.pos)) {
+      game.message('목표를 겨눌 수 없다.');
+      return ActionResult.failure;
+    }
+
+    final rng = game.rng;
+    final d = target.stats;
+    final hit = rng.nextInt(a.accuracy + d.evasion) < a.accuracy;
+    if (!hit) {
+      game.message('화살이 ${eulReul(target.name)} 빗나갔다.');
+    } else if (_blocked(target, rng)) {
+      game.message('${iGa(target.name)} 화살을 방패로 막았다.');
+    } else {
+      final damage = rollDamage(
+        rng,
+        a.maxDamage,
+        actor.rangedDamageMultiplier,
+        d.armor,
+      );
+      if (damage == 0) {
+        game.message('화살이 ${target.name}에게 맞았지만 피해를 주지 못했다.');
+      } else {
+        target.hp -= damage;
+        game.message('화살이 ${target.name}에게 명중해 $damage의 피해를 입혔다.');
+        if (!target.isAlive) game.onActorDied(target, actor);
+      }
+    }
+    return ActionResult.success(actor.rangedDelay);
+  }
+}
+
+/// 발밑의 아이템을 모두 줍는다 (소지품 칸이 허락하는 만큼).
+class PickUpAction extends Action {
+  const PickUpAction();
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player) return ActionResult.failure;
+    final items = game.itemsAt(actor.pos);
+    if (items.isEmpty) {
+      game.message('여기에는 주울 것이 없다.');
+      return ActionResult.failure;
+    }
+    final picked = <Item>[];
+    for (final item in [...items]) {
+      if (actor.isInventoryFull) break;
+      game.removeFloorItem(actor.pos, item);
+      actor.inventory.add(item);
+      picked.add(item);
+    }
+    if (picked.isEmpty) {
+      game.message('소지품이 가득 찼다.');
+      return ActionResult.failure;
+    }
+    game.message('${eulReul(picked.map((i) => i.name).join(', '))} 주웠다.');
+    if (game.itemsAt(actor.pos).isNotEmpty) {
+      game.message('소지품이 가득 차 나머지는 줍지 못했다.');
+    }
+    return const ActionResult.success(autPerTurn);
+  }
+}
+
+/// 소지품의 아이템을 발밑에 내려놓는다. 장착 중이면 먼저 해제해야 한다.
+class DropAction extends Action {
+  const DropAction(this.item);
+
+  final Item item;
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player || !actor.inventory.contains(item)) {
+      return ActionResult.failure;
+    }
+    if (actor.isEquipped(item)) {
+      game.message('장착 중인 아이템은 먼저 해제해야 한다.');
+      return ActionResult.failure;
+    }
+    actor.inventory.remove(item);
+    game.addFloorItem(actor.pos, item, noticed: true);
+    game.message('${eulReul(item.name)} 내려놓았다.');
+    return const ActionResult.success(autPerTurn);
+  }
+}
+
+/// 장착. 같은 부위에 장비가 있으면 바꿔 낀다 (두 장비의 시간이 모두 든다).
+class EquipAction extends Action {
+  const EquipAction(this.item);
+
+  final Item item;
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player ||
+        !actor.inventory.contains(item) ||
+        actor.isEquipped(item)) {
+      return ActionResult.failure;
+    }
+    final problem = actor.equipProblem(item);
+    if (problem != null) {
+      game.message(problem);
+      return ActionResult.failure;
+    }
+    final previous = actor.equipped(item.type.slot);
+    actor.equip(item);
+    final verb = switch (item.type) {
+      WeaponType() => '손에 들었다',
+      ArmourType() => '입었다',
+      ShieldType() => '들었다',
+    };
+    final instead = previous == null ? '' : '${previous.name} 대신 ';
+    game.message('$instead${eulReul(item.name)} $verb.');
+    return ActionResult.success(
+      item.type.equipTime + (previous?.type.equipTime ?? 0),
+    );
+  }
+}
+
+/// 장착 해제. 아이템은 소지품에 남는다.
+class UnequipAction extends Action {
+  const UnequipAction(this.slot);
+
+  final EquipSlot slot;
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player) return ActionResult.failure;
+    final item = actor.unequip(slot);
+    if (item == null) return ActionResult.failure;
+    final verb = switch (item.type) {
+      WeaponType() => '집어넣었다',
+      ArmourType() || ShieldType() => '벗었다',
+    };
+    game.message('${eulReul(item.name)} $verb.');
+    return ActionResult.success(item.type.equipTime);
   }
 }

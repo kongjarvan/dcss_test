@@ -7,6 +7,7 @@ import 'entity/actor.dart';
 import 'entity/monster_type.dart';
 import 'fov/shadowcasting.dart';
 import 'geometry.dart';
+import 'items/item.dart';
 import 'korean.dart';
 import 'message_log.dart';
 import 'progression/attribute_effects.dart';
@@ -60,6 +61,16 @@ class Game {
       player: player,
       monsters: monsters,
     );
+    // 시작 방을 뺀 방마다 일정 확률로 무작위 장비 하나.
+    for (final room in level.rooms.skip(1)) {
+      if (rng.nextDouble() >= itemChancePerRoom) continue;
+      final p = Pos(
+        room.left + rng.nextInt(room.width),
+        room.top + rng.nextInt(room.height),
+      );
+      final type = ItemTypes.all[rng.nextInt(ItemTypes.all.length)];
+      game.addFloorItem(p, Item(type));
+    }
     game.message('던전 1층에 들어섰다. 화면을 탭해 이동하세요.');
     return game;
   }
@@ -101,11 +112,118 @@ class Game {
   /// 시간이 흘렀으면 true.
   bool playerAct(Action action) {
     if (isGameOver) return false;
+    final from = player.pos;
+    newItemsUnderfoot = false;
     final cost = _perform(action, player);
     if (cost == null) return false;
     lastActionCost = cost;
+    if (player.pos != from) _noticeItemsUnderfoot();
     _advanceTime(cost);
     return true;
+  }
+
+  // ── 바닥 아이템 ──
+  /// 시작 방이 아닌 방에 장비가 놓일 확률.
+  static const itemChancePerRoom = 0.4;
+
+  final Map<Pos, List<Item>> _floorItems = {};
+
+  /// 플레이어가 이미 올라서서 확인한 아이템 더미 (자동 탐험이 다시 찾아가지 않음).
+  final Set<Pos> _noticedPiles = {};
+
+  List<Item> itemsAt(Pos p) => List.unmodifiable(_floorItems[p] ?? const []);
+
+  Iterable<Pos> get itemPositions => _floorItems.keys;
+
+  void addFloorItem(Pos p, Item item, {bool noticed = false}) {
+    (_floorItems[p] ??= []).add(item);
+    if (noticed) {
+      _noticedPiles.add(p);
+    } else {
+      _noticedPiles.remove(p);
+    }
+  }
+
+  void removeFloorItem(Pos p, Item item) {
+    final pile = _floorItems[p];
+    if (pile == null) return;
+    pile.remove(item);
+    if (pile.isEmpty) {
+      _floorItems.remove(p);
+      _noticedPiles.remove(p);
+    }
+  }
+
+  /// 아직 확인하지 않은, 본 적 있는 아이템 더미.
+  bool hasUnnoticedItems(Pos p) =>
+      _floorItems.containsKey(p) &&
+      !_noticedPiles.contains(p) &&
+      map.isExplored(p);
+
+  /// 직전 행동으로 처음 보는 아이템 더미 위에 올라섰는지 (자동 탐험 정지용).
+  bool newItemsUnderfoot = false;
+
+  void _noticeItemsUnderfoot() {
+    final items = itemsAt(player.pos);
+    if (items.isEmpty) return;
+    newItemsUnderfoot = _noticedPiles.add(player.pos);
+    final names = items.map((i) => i.name).join(', ');
+    message('여기에 ${iGa(names)} 있다.');
+  }
+
+  // ── 원거리 ──
+  /// [from]에서 [to]까지 쏠 수 있는지. 사이 칸에 벽·닫힌 문·다른 생물이 없어야 한다.
+  bool hasLineOfFire(Pos from, Pos to, {int range = fovRadius}) {
+    if (from.distanceTo(to) > range) return false;
+    for (final p in _lineBetween(from, to)) {
+      if (!map.contains(p) || map[p].blocksSight || actorAt(p) != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// 플레이어 근접 공격이 [target]에 닿는지 (장병기는 2칸, 사이 칸이 막히면 안 됨).
+  bool canReach(Actor target) =>
+      target.isAlive &&
+      target.pos != player.pos &&
+      hasLineOfFire(player.pos, target.pos, range: player.reach);
+
+  /// 양 끝을 뺀 직선 위의 칸들 (브레젠햄).
+  Iterable<Pos> _lineBetween(Pos a, Pos b) sync* {
+    var x = a.x, y = a.y;
+    final dx = (b.x - a.x).abs(), dy = -(b.y - a.y).abs();
+    final sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1;
+    var err = dx + dy;
+    while (true) {
+      final e2 = 2 * err;
+      if (e2 >= dy) {
+        err += dy;
+        x += sx;
+      }
+      if (e2 <= dx) {
+        err += dx;
+        y += sy;
+      }
+      final p = Pos(x, y);
+      if (p == b) return;
+      yield p;
+    }
+  }
+
+  /// 활로 쏠 수 있는 가장 가까운 적. 활이 없거나 대상이 없으면 null.
+  Monster? rangedTarget() {
+    if (player.launcher == null) return null;
+    final targets = visibleMonsters.toList()
+      ..sort(
+        (a, b) => a.pos
+            .distanceTo(player.pos)
+            .compareTo(b.pos.distanceTo(player.pos)),
+      );
+    for (final m in targets) {
+      if (hasLineOfFire(player.pos, m.pos)) return m;
+    }
+    return null;
   }
 
   /// 대체 행동을 따라가며 실행. 실패하면 null, 성공하면 소요 aut.
@@ -211,6 +329,8 @@ class Game {
   /// 가장 가까운 적을 공격하거나, 인접하지 않았으면 한 칸 다가가는 행동.
   /// 보이는 적이 없거나 다가갈 길이 없으면 null.
   Action? autoFightAction() {
+    final shootable = rangedTarget();
+    if (shootable != null) return RangedAttackAction(shootable);
     final targets = visibleMonsters.toList()
       ..sort(
         (a, b) => a.pos
@@ -219,6 +339,7 @@ class Game {
       );
     for (final m in targets) {
       if (m.pos.isAdjacentTo(player.pos)) return AttackAction(m);
+      if (canReach(m)) return ReachAttackAction(m);
       final path = findPath(
         player.pos,
         m.pos,
@@ -241,13 +362,16 @@ class Game {
         return map.contains(q) && !map.isExplored(q);
       });
 
-  /// 이동 칸 수 기준으로 가장 가까운 탐험 경계. 더 탐험할 곳이 없으면 null.
+  /// 자동 탐험이 찾아갈 곳: 탐험 경계, 또는 확인하지 않은 아이템 더미.
+  bool isExploreGoal(Pos p) => isExploreFrontier(p) || hasUnnoticedItems(p);
+
+  /// 이동 칸 수 기준으로 가장 가까운 탐험 목표. 더 탐험할 곳이 없으면 null.
   Pos? exploreTarget() {
     final visited = <Pos>{player.pos};
     final queue = <Pos>[player.pos];
     for (var i = 0; i < queue.length; i++) {
       final p = queue[i];
-      if (p != player.pos && isExploreFrontier(p)) return p;
+      if (p != player.pos && isExploreGoal(p)) return p;
       for (final d in Direction.all) {
         final q = p + d;
         if (map.isExplored(q) && map[q].traversable && visited.add(q)) {
