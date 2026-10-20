@@ -1,4 +1,5 @@
 import 'attributes.dart';
+import 'skills.dart';
 
 /// 플레이어 종족.
 ///
@@ -12,6 +13,8 @@ enum Species {
     dexterity: 10,
     intelligence: 10,
     faith: 10,
+    // 인간: 모든 적성 0
+    aptitudes: {},
   ),
   elf(
     name: '엘프',
@@ -20,6 +23,24 @@ enum Species {
     dexterity: 12,
     intelligence: 12,
     faith: 10,
+    aptitudes: {
+      Skill.mace: -2,
+      Skill.sword: 1,
+      Skill.axe: -2,
+      Skill.polearm: -1,
+      Skill.unarmed: -1,
+      Skill.bow: 1,
+      Skill.throwing: 1,
+      Skill.armour: -2,
+      Skill.dodging: 1,
+      Skill.stealth: 1,
+      Skill.shield: -2,
+      Skill.arcane: 2,
+      Skill.fire: 2,
+      Skill.earth: 2,
+      Skill.ice: 2,
+      Skill.summoning: 2,
+    },
   ),
   dwarf(
     name: '드워프',
@@ -28,6 +49,21 @@ enum Species {
     dexterity: 11,
     intelligence: 8,
     faith: 8,
+    aptitudes: {
+      Skill.mace: 2,
+      Skill.axe: 2,
+      Skill.bow: -2,
+      Skill.armour: 2,
+      Skill.dodging: -1,
+      Skill.stealth: -1,
+      Skill.shield: 2,
+      Skill.arcane: -2,
+      Skill.fire: 1,
+      Skill.earth: 2,
+      Skill.ice: -1,
+      Skill.summoning: -1,
+      Skill.invocation: -1,
+    },
   );
 
   const Species({
@@ -37,6 +73,7 @@ enum Species {
     required this.dexterity,
     required this.intelligence,
     required this.faith,
+    required this.aptitudes,
   });
 
   final String name;
@@ -45,6 +82,11 @@ enum Species {
   final int dexterity;
   final int intelligence;
   final int faith;
+
+  /// 숙련도 적성 (-3 ~ +3, 없으면 0). 적성 +4마다 필요 경험치 절반.
+  final Map<Skill, int> aptitudes;
+
+  int aptitude(Skill skill) => aptitudes[skill] ?? 0;
 
   int baseValue(Attribute attribute) => switch (attribute) {
     Attribute.strength => strength,

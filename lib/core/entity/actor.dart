@@ -3,6 +3,7 @@ import '../progression/attribute_effects.dart';
 import '../progression/attributes.dart';
 import '../progression/experience.dart';
 import '../progression/job.dart';
+import '../progression/skills.dart';
 import '../progression/species.dart';
 import '../time/energy.dart';
 import 'monster_type.dart';
@@ -61,6 +62,10 @@ abstract class Actor {
 class Player extends Actor {
   Player({required super.pos, this.species = Species.human, this.job})
     : attributes = startingAttributes(species, job),
+      skills = SkillSet(
+        aptitudes: species.aptitudes,
+        startingLevels: job?.startingSkills ?? const {},
+      ),
       super(
         name: '당신',
         maxHp: baseHp,
@@ -132,6 +137,9 @@ class Player extends Actor {
 
   /// 직업. 테스트 등에서 직업 없이 만들 때는 null.
   final Job? job;
+
+  /// 숙련도. 얻는 경험치가 훈련 중인 숙련도에 나뉘어 쌓인다.
+  final SkillSet skills;
   final Attributes attributes;
 
   /// 아직 투자하지 않은 능력치 포인트.

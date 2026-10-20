@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'character_sheet.dart';
 import 'game_controller.dart';
+import 'skills_screen.dart';
 
 /// 알림 점 (확인할 것이 있음).
 class _Dot extends StatelessWidget {
@@ -81,6 +82,7 @@ List<GameActionButton> actionsFor(
   ActionCategory category,
   GameController controller, {
   required VoidCallback openCharacterSheet,
+  required VoidCallback openSkills,
 }) {
   switch (category) {
     case ActionCategory.movement:
@@ -136,7 +138,11 @@ List<GameActionButton> actionsFor(
           onPressed: openCharacterSheet,
           highlight: controller.hasStatPoints,
         ),
-        const GameActionButton.comingSoon(label: '적성', icon: Icons.school),
+        GameActionButton(
+          label: '숙련도',
+          icon: Icons.school,
+          onPressed: openSkills,
+        ),
         const GameActionButton.comingSoon(
           label: '주문',
           icon: Icons.auto_fix_high,
@@ -193,6 +199,8 @@ class _ActionBarState extends State<ActionBar> {
                         controller,
                         openCharacterSheet: () =>
                             showCharacterSheet(context, controller),
+                        openSkills: () =>
+                            SkillsScreen.open(context, controller),
                       ).indexed) ...[
                         if (i > 0) const SizedBox(width: 6),
                         Expanded(child: _ActionButton(action: action)),

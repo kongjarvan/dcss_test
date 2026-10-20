@@ -185,6 +185,9 @@ class Game {
   }
 
   void _grantXp(int amount) {
+    for (final (skill, level) in player.skills.train(amount)) {
+      message('${skill.label} 숙련도가 ${numberIGa(level)} 되었다.');
+    }
     for (final level in player.gainXp(amount)) {
       message('레벨 업! 레벨 ${numberIGa(level)} 되었다. 능력치를 하나 올릴 수 있다.');
     }

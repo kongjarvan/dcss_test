@@ -2,9 +2,40 @@ import 'package:flutter/material.dart';
 
 import '../core/progression/attribute_effects.dart';
 import '../core/progression/attributes.dart';
+import '../core/progression/skills.dart';
 import '../core/progression/species.dart';
 import 'character_sheet.dart';
 import 'job_select_screen.dart';
+
+/// 적성 +2 이상은 "뛰어난 적성", -2 이하는 "약한 적성"으로 요약.
+List<Widget> _aptitudeLines(Species species) {
+  String list(bool Function(int) test) => Skill.values
+      .where((s) => test(species.aptitude(s)))
+      .map((s) => s.label)
+      .join(', ');
+  final strong = list((a) => a >= 2);
+  final weak = list((a) => a <= -2);
+  if (strong.isEmpty && weak.isEmpty) {
+    return const [
+      Text(
+        '적성  모든 숙련도가 고르다',
+        style: TextStyle(color: Color(0xFFD8CFBF), fontSize: 13),
+      ),
+    ];
+  }
+  return [
+    if (strong.isNotEmpty)
+      Text(
+        '뛰어난 적성  $strong',
+        style: const TextStyle(color: Color(0xFF7BC67B), fontSize: 13),
+      ),
+    if (weak.isNotEmpty)
+      Text(
+        '약한 적성  $weak',
+        style: const TextStyle(color: Color(0xFFE57373), fontSize: 13),
+      ),
+  ];
+}
 
 IconData speciesIcon(Species species) => switch (species) {
   Species.human => Icons.person,
@@ -108,6 +139,8 @@ class _SpeciesCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               AttributeGrid(valueOf: species.baseValue),
+              const SizedBox(height: 10),
+              ..._aptitudeLines(species),
             ],
           ),
         ),

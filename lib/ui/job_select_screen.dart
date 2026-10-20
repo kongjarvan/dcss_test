@@ -11,6 +11,13 @@ IconData jobIcon(Job job) => switch (job) {
   Job.hunter => Icons.track_changes,
 };
 
+/// 예) "검 3 · 갑옷 2 · 방패술 2 · 회피 1" (레벨 높은 순)
+String startingSkillsText(Job job) {
+  final entries = job.startingSkills.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return entries.map((e) => '${e.key.label} ${e.value}').join(' · ');
+}
+
 /// 종족을 고른 뒤 직업을 고르는 화면.
 /// 각 직업 카드에 "종족 + 직업 보정"을 합친 최종 시작 능력치를 보여준다.
 class JobSelectScreen extends StatelessWidget {
@@ -100,6 +107,11 @@ class _JobCard extends StatelessWidget {
               AttributeGrid(
                 valueOf: (a) => attributes[a],
                 bonusOf: job.adjustment,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '시작 숙련도  ${startingSkillsText(job)}',
+                style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 13),
               ),
             ],
           ),

@@ -7,6 +7,7 @@ import '../core/game.dart';
 import '../core/geometry.dart';
 import '../core/progression/attributes.dart';
 import '../core/progression/job.dart';
+import '../core/progression/skills.dart';
 import '../core/progression/species.dart';
 
 /// 자동 이동 종류.
@@ -88,6 +89,12 @@ class GameController extends ChangeNotifier {
 
   void increaseAttribute(Attribute attribute) {
     if (_game.increaseAttribute(attribute)) notifyListeners();
+  }
+
+  /// 숙련도 훈련 켜기/끄기. 턴을 소모하지 않는다.
+  void setSkillTraining(Skill skill, bool training) {
+    _game.player.skills.setTraining(skill, training);
+    notifyListeners();
   }
 
   void autoFight() {
