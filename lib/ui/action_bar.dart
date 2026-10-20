@@ -40,6 +40,7 @@ enum DisabledReason {
   enemyInSight('적이 보임', Icons.visibility),
   fullyRested('회복 완료', Icons.favorite),
   noItems('주울 것 없음', Icons.block),
+  noPotions('물약 없음', Icons.block),
   noLauncher('활 필요', Icons.do_not_disturb_on),
   noTarget('대상 없음', Icons.location_disabled);
 
@@ -89,6 +90,7 @@ List<GameActionButton> actionsFor(
   required VoidCallback openSkills,
   required VoidCallback openInventory,
   required VoidCallback openEquipment,
+  required VoidCallback openQuaff,
 }) {
   switch (category) {
     case ActionCategory.movement:
@@ -144,6 +146,12 @@ List<GameActionButton> actionsFor(
           onPressed: controller.canPickUp ? controller.pickUp : null,
           disabledReason: DisabledReason.noItems,
           highlight: controller.canPickUp,
+        ),
+        GameActionButton(
+          label: '물약 마시기',
+          icon: Icons.local_drink,
+          onPressed: controller.hasPotions ? openQuaff : null,
+          disabledReason: DisabledReason.noPotions,
         ),
         GameActionButton(
           label: '소지품',
@@ -235,6 +243,7 @@ class _ActionBarState extends State<ActionBar> {
                             InventoryScreen.open(context, controller),
                         openEquipment: () =>
                             EquipmentScreen.open(context, controller),
+                        openQuaff: () => showQuaffSheet(context, controller),
                       ).indexed) ...[
                         if (i > 0) const SizedBox(width: 6),
                         Expanded(child: _ActionButton(action: action)),

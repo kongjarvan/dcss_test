@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../geometry.dart';
 import '../items/item.dart';
+import 'status.dart';
 import '../progression/attribute_effects.dart';
 import '../progression/attributes.dart';
 import '../progression/experience.dart';
@@ -84,8 +85,8 @@ class Player extends Actor {
       ) {
     for (final type in job?.startingItems ?? const <ItemType>[]) {
       final item = Item(type);
-      inventory.add(item);
-      equip(item);
+      addItem(item);
+      if (type is EquipmentType) equip(item);
     }
   }
 
@@ -96,8 +97,30 @@ class Player extends Actor {
   final Map<EquipSlot, Item> _equipped = {};
 
   Item? equipped(EquipSlot slot) => _equipped[slot];
-  bool isEquipped(Item item) => _equipped[item.type.slot] == item;
+  bool isEquipped(Item item) => switch (item.type) {
+    EquipmentType(:final slot) => _equipped[slot] == item,
+    _ => false,
+  };
   bool get isInventoryFull => inventory.length >= inventoryCapacity;
+
+  /// 소지품에 넣는다. 물약은 같은 종류와 겹친다. 자리가 없으면 false.
+  bool addItem(Item item) {
+    for (final owned in inventory) {
+      if (owned.canStackWith(item)) {
+        owned.quantity += item.quantity;
+        return true;
+      }
+    }
+    if (isInventoryFull) return false;
+    inventory.add(item);
+    return true;
+  }
+
+  /// [item]을 [count]개 소지품에서 뺀다 (다 쓰면 칸이 비워진다).
+  void consume(Item item, [int count = 1]) {
+    item.quantity -= count;
+    if (item.quantity <= 0) inventory.remove(item);
+  }
 
   WeaponType? get weaponType =>
       _equipped[EquipSlot.weapon]?.type as WeaponType?;
@@ -118,6 +141,7 @@ class Player extends Actor {
   /// [item]을 장착할 수 없는 이유. 장착 가능하면 null.
   String? equipProblem(Item item) {
     final type = item.type;
+    if (type is! EquipmentType) return '장착할 수 없는 아이템이다.';
     if (type is WeaponType && type.twoHanded && shieldType != null) {
       return '양손 무기를 들려면 먼저 방패를 벗어야 한다.';
     }
@@ -130,8 +154,45 @@ class Player extends Actor {
   /// 같은 부위의 장비는 바꿔 낀다. 소지품에 있는 아이템이어야 한다.
   void equip(Item item) {
     assert(inventory.contains(item));
-    _equipped[item.type.slot] = item;
+    _equipped[(item.type as EquipmentType).slot] = item;
   }
+
+  // ── 상태 효과 ──
+  /// 상태 효과와 남은 시간 (aut).
+  final Map<Status, int> statuses = {};
+
+  /// 중독 피해 누적 (10 aut마다 HP 1).
+  int poisonProgress = 0;
+
+  bool has(Status status) => statuses.containsKey(status);
+
+  /// 상태 효과를 건다. 이미 걸려 있으면 시간이 늘어난다 (상한 있음).
+  void addStatus(Status status, int aut) {
+    statuses[status] = math.min(
+      Status.maxDuration,
+      (statuses[status] ?? 0) + aut,
+    );
+  }
+
+  /// 상태 효과까지 반영한 능력치. 전투·재생 계산은 모두 이 값을 쓴다.
+  int attribute(Attribute a) =>
+      attributes[a] +
+      statuses.keys.where((s) => s.boosts == a).length * Status.attributeBoost;
+
+  Attributes get effectiveAttributes => Attributes(
+    strength: attribute(Attribute.strength),
+    dexterity: attribute(Attribute.dexterity),
+    intelligence: attribute(Attribute.intelligence),
+    faith: attribute(Attribute.faith),
+  );
+
+  /// 행동 시간 배율: 가속 ×0.5, 둔화 ×1.5 (둘 다면 상쇄).
+  double get actionTimeMultiplier =>
+      switch ((has(Status.haste), has(Status.slow))) {
+        (true, false) => 0.5,
+        (false, true) => 1.5,
+        _ => 1.0,
+      };
 
   Item? unequip(EquipSlot slot) => _equipped.remove(slot);
 
@@ -172,7 +233,7 @@ class Player extends Actor {
 
   /// 권능 사용 시 실제 소모되는 신앙심. 신앙이 높을수록 적다.
   int pietyCostFor(int baseCost) =>
-      AttributeEffects.pietyCost(baseCost, attributes[Attribute.faith]);
+      AttributeEffects.pietyCost(baseCost, attribute(Attribute.faith));
 
   /// 권능 비용([baseCost])만큼 신앙심을 소모. 부족하면 false.
   bool spendPiety(int baseCost) {
@@ -188,7 +249,7 @@ class Player extends Actor {
   int get autPerHpRegen =>
       (baseAutPerHpRegen /
               AttributeEffects.hpRegenMultiplier(
-                attributes[Attribute.dexterity],
+                attribute(Attribute.dexterity),
               ))
           .round();
 
@@ -214,7 +275,7 @@ class Player extends Actor {
   /// 근접 전투 수치 = 기본 + 민첩 + 무기 + 갑옷 + 숙련도.
   @override
   CombatStats get stats {
-    final s = AttributeEffects.applyTo(baseStats, attributes);
+    final s = AttributeEffects.applyTo(baseStats, effectiveAttributes);
     final weapon = meleeWeapon;
     final armour = armourType;
     return CombatStats(
@@ -244,7 +305,7 @@ class Player extends Actor {
   /// 힘 × 무기 숙련도 → 근접 피해
   @override
   double get meleeDamageMultiplier =>
-      AttributeEffects.meleeDamageMultiplier(attributes[Attribute.strength]) *
+      AttributeEffects.meleeDamageMultiplier(attribute(Attribute.strength)) *
       SkillEffects.weaponDamageMultiplier(_meleeSkill);
 
   @override
@@ -254,7 +315,7 @@ class Player extends Actor {
   /// 갑옷·방패 무게로 인한 회피 감소. 힘이 높을수록 덜 줄어든다.
   int get armourEvasionPenalty => AttributeEffects.armourEvasionPenalty(
     SkillEffects.encumbranceEvasionPenalty(_encumbrance),
-    attributes[Attribute.strength],
+    attribute(Attribute.strength),
   );
 
   @override
@@ -270,7 +331,7 @@ class Player extends Actor {
     return CombatStats(
       accuracy: math.max(
         1,
-        AttributeEffects.applyTo(baseStats, attributes).accuracy +
+        AttributeEffects.applyTo(baseStats, effectiveAttributes).accuracy +
             bow.accuracy +
             SkillEffects.weaponAccuracy(_skill(bow.skill)),
       ),
@@ -282,7 +343,7 @@ class Player extends Actor {
 
   /// 민첩 × 활 숙련도 → 원거리 피해
   double get rangedDamageMultiplier =>
-      AttributeEffects.rangedDamageMultiplier(attributes[Attribute.dexterity]) *
+      AttributeEffects.rangedDamageMultiplier(attribute(Attribute.dexterity)) *
       SkillEffects.weaponDamageMultiplier(_skill(launcher?.skill ?? Skill.bow));
 
   int get rangedDelay => SkillEffects.attackDelay(

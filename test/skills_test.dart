@@ -154,7 +154,9 @@ void main() {
     final player = Player(pos: const Pos(3, 3))
       ..baseStats = const CombatStats(accuracy: 1000, maxDamage: 5, evasion: 0)
       ..skills.setTraining(Skill.sword, true);
-    final goblin = Monster(MonsterTypes.goblin, pos: const Pos(4, 3))..hp = 1;
+    final goblin = Monster(MonsterTypes.goblin, pos: const Pos(4, 3))
+      ..hp = 1
+      ..baseStats = const CombatStats(accuracy: 6, maxDamage: 4, evasion: 0);
     final game = Game(
       rng: Random(1),
       map: map,

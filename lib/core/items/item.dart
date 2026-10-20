@@ -16,6 +16,11 @@ sealed class ItemType {
 
   final String id;
   final String name;
+}
+
+/// 장착하는 아이템: 무기·갑옷·방패.
+sealed class EquipmentType extends ItemType {
+  const EquipmentType({required super.id, required super.name});
 
   EquipSlot get slot;
 
@@ -23,7 +28,21 @@ sealed class ItemType {
   int get equipTime;
 }
 
-class WeaponType extends ItemType {
+/// 물약. 효과는 [Potion]에 정의되어 있다.
+class PotionType extends ItemType {
+  PotionType._(this.potion) : super(id: potion.name, name: potion.label);
+
+  final Potion potion;
+
+  static final Map<Potion, PotionType> _all = {
+    for (final p in Potion.values) p: PotionType._(p),
+  };
+
+  /// 물약 종류마다 하나뿐인 인스턴스 (같은 물약끼리 겹치기 위해).
+  static PotionType of(Potion potion) => _all[potion]!;
+}
+
+class WeaponType extends EquipmentType {
   const WeaponType({
     required super.id,
     required super.name,
@@ -63,7 +82,7 @@ class WeaponType extends ItemType {
   int get equipTime => 5;
 }
 
-class ArmourType extends ItemType {
+class ArmourType extends EquipmentType {
   const ArmourType({
     required super.id,
     required super.name,
@@ -85,7 +104,7 @@ class ArmourType extends ItemType {
   int get equipTime => 50;
 }
 
-class ShieldType extends ItemType {
+class ShieldType extends EquipmentType {
   const ShieldType({
     required super.id,
     required super.name,
@@ -105,13 +124,51 @@ class ShieldType extends ItemType {
   int get equipTime => 10;
 }
 
-/// 아이템 하나. 나중에 강화 수치 등이 여기에 붙는다.
+/// 아이템 하나 (물약은 여러 개가 한 묶음). 나중에 강화 수치 등이 여기에 붙는다.
 class Item {
-  Item(this.type);
+  Item(this.type, {this.quantity = 1});
 
   final ItemType type;
 
+  /// 겹친 개수. 장비는 항상 1.
+  int quantity;
+
+  /// 식별 여부와 관계없는 진짜 이름. 화면에는 [Game.nameOf]를 쓴다.
   String get name => type.name;
+
+  bool get stackable => type is PotionType;
+
+  bool canStackWith(Item other) => stackable && other.type == type;
+}
+
+/// 물약 종류.
+enum Potion {
+  curing('치유 물약', 'HP를 조금 회복하고 독을 없앤다.', weight: 10),
+  healWounds('상처 치료 물약', 'HP를 크게 회복한다.', weight: 6),
+  magic('마나 물약', 'MP를 회복한다.', weight: 5),
+  haste('가속 물약', '한동안 모든 행동이 두 배 빨라진다.', weight: 4),
+  might('힘 물약', '한동안 힘이 5 오른다.', weight: 4),
+  agility('민첩 물약', '한동안 민첩이 5 오른다.', weight: 4),
+  brilliance('지능 물약', '한동안 지능이 5 오른다.', weight: 4),
+  slowing('둔화 물약', '한동안 모든 행동이 느려진다.', weight: 3, harmful: true),
+  poison('독 물약', '한동안 독에 걸려 매 턴 HP가 줄어든다.', weight: 3, harmful: true),
+  experience('경험 물약', '즉시 레벨이 하나 오른다.', weight: 1),
+  enlightenment('깨달음 물약', '이 층의 지도 전체가 머릿속에 떠오른다.', weight: 2);
+
+  const Potion(
+    this.label,
+    this.description, {
+    required this.weight,
+    this.harmful = false,
+  });
+
+  final String label;
+  final String description;
+
+  /// 바닥에 생길 때의 상대 빈도.
+  final int weight;
+
+  final bool harmful;
 }
 
 /// 아이템 목록. 수치는 DCSS를 참고했다.

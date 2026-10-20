@@ -28,6 +28,11 @@ class DungeonMap {
 
   void clearVisibility() => _visible.fillRange(0, _visible.length, false);
 
+  /// 본 적 있는 칸으로 표시 (지금 보이지는 않음). 깨달음 물약 등.
+  void markExplored(Pos p) {
+    if (contains(p)) _explored[_index(p)] = true;
+  }
+
   void markVisible(Pos p) {
     if (!contains(p)) return;
     final i = _index(p);

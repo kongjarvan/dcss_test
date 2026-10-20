@@ -98,7 +98,9 @@ void main() {
         map[Pos(x, y)] = TileType.floor;
       }
     }
-    final goblin = Monster(MonsterTypes.goblin, pos: const Pos(4, 3))..hp = 1;
+    final goblin = Monster(MonsterTypes.goblin, pos: const Pos(4, 3))
+      ..hp = 1
+      ..baseStats = const CombatStats(accuracy: 6, maxDamage: 4, evasion: 0);
     final game = Game(
       rng: Random(1),
       map: map,

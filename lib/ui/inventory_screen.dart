@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/entity/actor.dart';
+import '../core/game.dart';
 import '../core/items/item.dart';
 import '../core/progression/skill_effects.dart';
 import '../core/progression/skills.dart';
@@ -14,46 +15,64 @@ const _dim = TextStyle(color: Color(0xFF8A8478), fontSize: 13);
 String _turns(int aut) => (aut / autPerTurn).toStringAsFixed(1);
 String _signed(int n) => n >= 0 ? '+$n' : '$n';
 
-/// 아이템 수치 요약. 예) "피해 10 · 명중 +1 · 공격 1.4턴 · 검"
-String itemSummary(ItemType type) => switch (type) {
-  WeaponType() => [
-    '피해 ${type.damage}',
-    '명중 ${_signed(type.accuracy)}',
-    '공격 ${_turns(type.delay)}턴',
-    type.skill.label,
-    if (type.twoHanded) '양손',
-    if (type.reach > 1) '사거리 ${type.reach}',
-    if (type.ranged) '원거리',
-  ].join(' · '),
-  ArmourType() => '방어 ${type.ac} · 무게 ${type.encumbrance}',
-  ShieldType() => '막기 ${type.block} · 무게 ${type.encumbrance}',
-};
+/// 아이템 설명 한 줄. 예) "피해 10 · 명중 +1 · 공격 1.4턴 · 검"
+/// 미확인 물약은 효과를 알려주지 않는다.
+String itemSummary(Game game, Item item) {
+  final type = item.type;
+  return switch (type) {
+    WeaponType() => [
+      '피해 ${type.damage}',
+      '명중 ${_signed(type.accuracy)}',
+      '공격 ${_turns(type.delay)}턴',
+      type.skill.label,
+      if (type.twoHanded) '양손',
+      if (type.reach > 1) '사거리 ${type.reach}',
+      if (type.ranged) '원거리',
+    ].join(' · '),
+    ArmourType() => '방어 ${type.ac} · 무게 ${type.encumbrance}',
+    ShieldType() => '막기 ${type.block} · 무게 ${type.encumbrance}',
+    PotionType() =>
+      game.isIdentified(item)
+          ? type.potion.description
+          : '마셔 보기 전에는 어떤 물약인지 알 수 없다.',
+  };
+}
 
-/// 맵과 같은 그림으로 그린 아이템 아이콘.
+/// 맵과 같은 그림으로 그린 아이템 아이콘. 물약은 게임마다 정해진 색으로.
 class ItemIcon extends StatelessWidget {
-  const ItemIcon(this.type, {super.key, this.size = 40});
+  const ItemIcon(this.type, {super.key, this.tint, this.size = 40});
+
+  ItemIcon.of(Game game, Item item, {Key? key, double size = 40})
+    : this(item.type, key: key, tint: potionTint(game, item.type), size: size);
 
   final ItemType type;
+  final int? tint;
   final double size;
+
+  static int? potionTint(Game game, ItemType type) => switch (type) {
+    PotionType(:final potion) => game.potionAppearance[potion]!.color,
+    _ => null,
+  };
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: size,
-    child: CustomPaint(painter: _ItemPainter(type)),
+    child: CustomPaint(painter: _ItemPainter(type, tint)),
   );
 }
 
 class _ItemPainter extends CustomPainter {
-  _ItemPainter(this.type);
+  _ItemPainter(this.type, this.tint);
 
   final ItemType type;
+  final int? tint;
 
   @override
   void paint(Canvas canvas, Size size) =>
-      _renderer.drawItem(canvas, Offset.zero & size, type);
+      _renderer.drawItem(canvas, Offset.zero & size, type, tint: tint);
 
   @override
-  bool shouldRepaint(_ItemPainter old) => old.type != type;
+  bool shouldRepaint(_ItemPainter old) => old.type != type || old.tint != tint;
 }
 
 /// 화면 아래에 가장 최근 메시지를 보여준다 (장착 결과 등 확인용).
@@ -130,7 +149,7 @@ class InventoryScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                '${items.length} / ${Player.inventoryCapacity}칸 · 아이템을 누르면 장착하거나 버릴 수 있습니다.',
+                '${items.length} / ${Player.inventoryCapacity}칸 · 아이템을 누르면 장착·마시기·버리기를 할 수 있습니다.',
                 style: _dim,
               ),
             ),
@@ -141,6 +160,7 @@ class InventoryScreen extends StatelessWidget {
               ),
             for (final item in items)
               _ItemTile(
+                game: controller.game,
                 item: item,
                 equipped: player.isEquipped(item),
                 onTap: () => _showItemSheet(context, item),
@@ -167,40 +187,48 @@ class InventoryScreen extends StatelessWidget {
 
 class _ItemTile extends StatelessWidget {
   const _ItemTile({
+    required this.game,
     required this.item,
     required this.equipped,
     required this.onTap,
   });
 
+  final Game game;
   final Item item;
   final bool equipped;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final type = item.type;
     return ListTile(
       onTap: onTap,
-      leading: ItemIcon(item.type),
+      leading: ItemIcon.of(game, item),
       title: Row(
         children: [
-          Text(item.name, style: const TextStyle(color: Colors.white)),
-          if (equipped) ...[
+          Flexible(
+            child: Text(
+              game.nameOf(item),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+          if (equipped && type is EquipmentType) ...[
             const SizedBox(width: 8),
             const Icon(Icons.check_circle, size: 16, color: Color(0xFFFFD54F)),
             const SizedBox(width: 2),
             Text(
-              item.type.slot == EquipSlot.weapon ? '든 것' : '착용',
+              type.slot == EquipSlot.weapon ? '든 것' : '착용',
               style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 12),
             ),
           ],
         ],
       ),
-      subtitle: Text(itemSummary(item.type), style: _dim),
+      subtitle: Text(itemSummary(game, item), style: _dim),
     );
   }
 }
 
-/// 아이템 하나의 상세와 장착/해제/버리기 버튼.
+/// 아이템 하나의 상세와 행동 버튼 (장비: 장착/해제·버리기, 물약: 마시기·버리기).
 class _ItemSheet extends StatelessWidget {
   const _ItemSheet({required this.controller, required this.item});
 
@@ -209,17 +237,25 @@ class _ItemSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final player = controller.game.player;
-    // 버렸으면 창을 닫는다.
+    final game = controller.game;
+    final player = game.player;
+    // 다 마셨거나 버렸으면 창을 닫는다.
     if (!player.inventory.contains(item)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) Navigator.of(context).maybePop();
       });
       return const SizedBox.shrink();
     }
+    final type = item.type;
     final equipped = player.isEquipped(item);
-    final problem = equipped ? null : player.equipProblem(item);
-    final turns = _turns(item.type.equipTime);
+    final problem = type is EquipmentType && !equipped
+        ? player.equipProblem(item)
+        : null;
+    final kind = switch (type) {
+      EquipmentType() =>
+        '${type.slot.label} · 장착/해제 ${_turns(type.equipTime)}턴',
+      PotionType() => '물약 · 마시는 데 1턴',
+    };
 
     return SafeArea(
       child: Padding(
@@ -230,24 +266,21 @@ class _ItemSheet extends StatelessWidget {
           children: [
             Row(
               children: [
-                ItemIcon(item.type, size: 56),
+                ItemIcon.of(game, item, size: 56),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item.name,
+                        game.nameOf(item),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        '${item.type.slot.label} · 장착/해제 $turns턴',
-                        style: _dim,
-                      ),
+                      Text(kind, style: _dim),
                     ],
                   ),
                 ),
@@ -255,7 +288,7 @@ class _ItemSheet extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              itemSummary(item.type),
+              itemSummary(game, item),
               style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 14),
             ),
             if (problem != null) ...[
@@ -268,15 +301,20 @@ class _ItemSheet extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                if (equipped)
-                  IconButton.filledTonal(
+                switch (type) {
+                  PotionType() => IconButton.filled(
+                    tooltip: '마시기',
+                    iconSize: 28,
+                    onPressed: () => controller.quaff(item),
+                    icon: const Icon(Icons.local_drink),
+                  ),
+                  EquipmentType() when equipped => IconButton.filledTonal(
                     tooltip: '해제',
                     iconSize: 28,
-                    onPressed: () => controller.unequip(item.type.slot),
+                    onPressed: () => controller.unequip(type.slot),
                     icon: const Icon(Icons.remove_circle_outline),
-                  )
-                else
-                  IconButton.filled(
+                  ),
+                  EquipmentType() => IconButton.filled(
                     tooltip: '장착',
                     iconSize: 28,
                     onPressed: problem == null
@@ -284,6 +322,7 @@ class _ItemSheet extends StatelessWidget {
                         : null,
                     icon: const Icon(Icons.check_circle_outline),
                   ),
+                },
                 const SizedBox(width: 12),
                 IconButton.filledTonal(
                   tooltip: equipped ? '버리기 · 먼저 해제' : '버리기',
@@ -298,6 +337,38 @@ class _ItemSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 물약 빠른 선택 창 (아이템 탭의 마시기 버튼). 누르면 바로 마시고 닫힌다.
+Future<void> showQuaffSheet(BuildContext context, GameController controller) {
+  final game = controller.game;
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: const Color(0xFF1A1714),
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final item in game.player.inventory.where(
+            (i) => i.type is PotionType,
+          ))
+            ListTile(
+              leading: ItemIcon.of(game, item),
+              title: Text(
+                game.nameOf(item),
+                style: const TextStyle(color: Colors.white),
+              ),
+              subtitle: Text(itemSummary(game, item), style: _dim),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                controller.quaff(item);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 // ───────────────────────── 장비 ─────────────────────────
@@ -325,6 +396,7 @@ class EquipmentScreen extends StatelessWidget {
         children: [
           for (final slot in EquipSlot.values)
             _SlotTile(
+              game: controller.game,
               slot: slot,
               item: player.equipped(slot),
               onUnequip: () => controller.unequip(slot),
@@ -362,11 +434,13 @@ class EquipmentScreen extends StatelessWidget {
 
 class _SlotTile extends StatelessWidget {
   const _SlotTile({
+    required this.game,
     required this.slot,
     required this.item,
     required this.onUnequip,
   });
 
+  final Game game;
   final EquipSlot slot;
   final Item? item;
   final VoidCallback onUnequip;
@@ -388,7 +462,9 @@ class _SlotTile extends StatelessWidget {
         ),
       ),
       subtitle: Text(
-        item == null ? slot.label : '${slot.label} · ${itemSummary(item.type)}',
+        item == null
+            ? slot.label
+            : '${slot.label} · ${itemSummary(game, item)}',
         style: _dim,
       ),
       trailing: item == null

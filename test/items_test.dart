@@ -288,7 +288,9 @@ void main() {
           maxDamage: 3,
           evasion: 5,
         );
-      final target = Monster(MonsterTypes.goblin, pos: const Pos(6, 2))..hp = 1;
+      final target = Monster(MonsterTypes.goblin, pos: const Pos(6, 2))
+        ..hp = 1
+        ..baseStats = const CombatStats(accuracy: 6, maxDamage: 4, evasion: 0);
       final game = gameWith(p, monsters: [target]);
       expect(game.playerAct(RangedAttackAction(target)), isTrue);
       expect(target.isAlive, isFalse);

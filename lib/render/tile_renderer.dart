@@ -20,7 +20,9 @@ abstract class TileRenderer {
     ShieldType? shield,
   });
   void drawMonster(Canvas canvas, Rect rect, MonsterType type);
-  void drawItem(Canvas canvas, Rect rect, ItemType type);
+
+  /// [tint]: 물약 색 (0xAARRGGBB). 물약 외에는 무시.
+  void drawItem(Canvas canvas, Rect rect, ItemType type, {int? tint});
 }
 
 /// 코드로 그린 임시 타일 그래픽.
@@ -294,7 +296,7 @@ class ProceduralTileRenderer implements TileRenderer {
 
   // ── 아이템 ──
   @override
-  void drawItem(Canvas c, Rect r, ItemType type) {
+  void drawItem(Canvas c, Rect r, ItemType type, {int? tint}) {
     final w = r.width;
     final h = r.height;
     switch (type) {
@@ -306,6 +308,8 @@ class ProceduralTileRenderer implements TileRenderer {
         _weapon(c, grip, grip + (full - grip) * length, w, type.skill);
       case ArmourType():
         _armour(c, r.deflate(w * 0.18), type);
+      case PotionType():
+        _potion(c, r.deflate(w * 0.2), Color(tint ?? 0xFFB0B0B0));
       case ShieldType():
         final size = switch (type.id) {
           'buckler' => 0.42,
@@ -399,6 +403,37 @@ class ProceduralTileRenderer implements TileRenderer {
       default:
         c.drawLine(grip, tip, _stroke(_wood, thin));
     }
+  }
+
+  /// 둥근 플라스크에 [liquid] 색 액체.
+  void _potion(Canvas c, Rect r, Color liquid) {
+    final w = r.width;
+    final h = r.height;
+    final bulb = Offset(r.center.dx, r.top + h * 0.64);
+    final radius = w * 0.36;
+    final neck = Rect.fromCenter(
+      center: Offset(r.center.dx, r.top + h * 0.2),
+      width: w * 0.24,
+      height: h * 0.3,
+    );
+    const glass = Color(0x55FFFFFF);
+    c.drawRect(neck, _fill(glass));
+    c.drawCircle(bulb, radius, _fill(liquid));
+    // 유리 테두리와 반사광
+    final outline = _stroke(const Color(0xCCFFFFFF), math.max(1, w * 0.05))
+      ..style = PaintingStyle.stroke;
+    c.drawCircle(bulb, radius, outline);
+    c.drawRect(neck, outline);
+    c.drawCircle(
+      bulb + Offset(-radius * 0.4, -radius * 0.4),
+      radius * 0.18,
+      _fill(const Color(0x88FFFFFF)),
+    );
+    // 코르크 마개
+    c.drawRect(
+      Rect.fromLTWH(neck.left, neck.top - h * 0.08, neck.width, h * 0.1),
+      _fill(const Color(0xFF9A7B4F)),
+    );
   }
 
   void _armour(Canvas c, Rect r, ArmourType type) {

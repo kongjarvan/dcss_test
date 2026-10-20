@@ -117,6 +117,10 @@ class GameController extends ChangeNotifier {
   void equip(Item item) => _act(EquipAction(item));
   void unequip(EquipSlot slot) => _act(UnequipAction(slot));
   void drop(Item item) => _act(DropAction(item));
+  void quaff(Item item) => _act(QuaffAction(item));
+
+  bool get hasPotions =>
+      _game.player.inventory.any((i) => i.type is PotionType);
 
   // ── 원거리 ──
   bool get hasLauncher => _game.player.launcher != null;

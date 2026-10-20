@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart';
 
 import '../core/game.dart';
 import '../core/geometry.dart';
+import '../core/items/item.dart';
 import 'tile_renderer.dart';
 
 /// 플레이어를 중심으로 던전을 그린다.
@@ -66,7 +67,17 @@ class MapPainter extends CustomPainter {
         renderer.drawTile(canvas, rect, map[p], p);
         // 바닥 아이템은 본 적 있는 칸이면 기억해서 그린다 (맨 위 하나만).
         final items = game.itemsAt(p);
-        if (items.isNotEmpty) renderer.drawItem(canvas, rect, items.last.type);
+        if (items.isNotEmpty) {
+          final type = items.last.type;
+          renderer.drawItem(
+            canvas,
+            rect,
+            type,
+            tint: type is PotionType
+                ? game.potionAppearance[type.potion]!.color
+                : null,
+          );
+        }
         if (!map.isVisible(p)) canvas.drawRect(rect, fog);
       }
     }

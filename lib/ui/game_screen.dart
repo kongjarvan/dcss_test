@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/entity/status.dart';
 import '../core/game.dart';
 import '../core/message_log.dart';
 import '../core/progression/job.dart';
@@ -261,6 +262,18 @@ class _StatusBar extends StatelessWidget {
               Text('처치 ${game.kills}', style: labelStyle),
             ],
           ),
+          if (player.statuses.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final MapEntry(key: status, value: aut)
+                    in player.statuses.entries)
+                  _StatusChip(status: status, aut: aut),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -313,6 +326,48 @@ class _BarRow extends StatelessWidget {
         ),
         const SizedBox(width: 40),
       ],
+    );
+  }
+}
+
+IconData statusIcon(Status status) => switch (status) {
+  Status.haste => Icons.fast_forward,
+  Status.slow => Icons.slow_motion_video,
+  Status.might => Icons.fitness_center,
+  Status.agility => Icons.air,
+  Status.brilliance => Icons.psychology,
+  Status.poison => Icons.sick,
+};
+
+/// 상태 효과 표시: 아이콘 + 이름 + 남은 턴. 해로운 효과는 빨간색.
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status, required this.aut});
+
+  final Status status;
+  final int aut;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = status.harmful
+        ? const Color(0xFFE57373)
+        : const Color(0xFF7BC67B);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: color.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(statusIcon(status), size: 13, color: color),
+          const SizedBox(width: 3),
+          Text(
+            '${status.label} ${(aut / autPerTurn).ceil()}',
+            style: TextStyle(color: color, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }

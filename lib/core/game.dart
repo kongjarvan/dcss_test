@@ -7,7 +7,10 @@ import 'entity/actor.dart';
 import 'entity/monster_type.dart';
 import 'fov/shadowcasting.dart';
 import 'geometry.dart';
+import 'entity/status.dart';
 import 'items/item.dart';
+import 'items/potion_appearance.dart';
+import 'world/tile.dart';
 import 'korean.dart';
 import 'message_log.dart';
 import 'progression/attribute_effects.dart';
@@ -26,7 +29,34 @@ class Game {
     required this.player,
     List<Monster>? monsters,
   }) : monsters = monsters ?? [] {
+    // 게임마다 물약 색을 무작위로 배정한다 (마셔 보기 전엔 무슨 물약인지 모름).
+    final looks = [...PotionAppearance.all]..shuffle(rng);
+    for (final (i, potion) in Potion.values.indexed) {
+      potionAppearance[potion] = looks[i];
+    }
     updateFov();
+  }
+
+  // ── 물약 식별 ──
+  final Map<Potion, PotionAppearance> potionAppearance = {};
+
+  /// 마셔서 정체를 알게 된 물약.
+  final Set<Potion> identifiedPotions = {};
+
+  bool isIdentified(Item item) => switch (item.type) {
+    PotionType(:final potion) => identifiedPotions.contains(potion),
+    _ => true,
+  };
+
+  /// 화면에 보이는 이름. 미확인 물약은 색으로, 여러 개면 개수를 붙인다.
+  /// 예) "붉은 물약", "치유 물약 3개"
+  String nameOf(Item item, {bool withCount = true}) {
+    final base = switch (item.type) {
+      PotionType(:final potion) when !identifiedPotions.contains(potion) =>
+        '${potionAppearance[potion]!.name} 물약',
+      _ => item.name,
+    };
+    return withCount && item.quantity > 1 ? '$base ${item.quantity}개' : base;
   }
 
   factory Game.newGame({int? seed, Species species = Species.human, Job? job}) {
@@ -61,15 +91,25 @@ class Game {
       player: player,
       monsters: monsters,
     );
-    // 시작 방을 뺀 방마다 일정 확률로 무작위 장비 하나.
+    // 시작 방을 뺀 방마다 일정 확률로 무작위 장비 하나, 물약 하나.
+    Pos randomCell(GridRect room) => Pos(
+      room.left + rng.nextInt(room.width),
+      room.top + rng.nextInt(room.height),
+    );
     for (final room in level.rooms.skip(1)) {
-      if (rng.nextDouble() >= itemChancePerRoom) continue;
-      final p = Pos(
-        room.left + rng.nextInt(room.width),
-        room.top + rng.nextInt(room.height),
-      );
-      final type = ItemTypes.all[rng.nextInt(ItemTypes.all.length)];
-      game.addFloorItem(p, Item(type));
+      if (rng.nextDouble() < itemChancePerRoom) {
+        final type = ItemTypes.all[rng.nextInt(ItemTypes.all.length)];
+        game.addFloorItem(randomCell(room), Item(type));
+      }
+      if (rng.nextDouble() < potionChancePerRoom) {
+        game.addFloorItem(
+          randomCell(room),
+          Item(
+            PotionType.of(randomPotion(rng)),
+            quantity: rng.nextDouble() < 0.15 ? 2 : 1,
+          ),
+        );
+      }
     }
     game.message('던전 1층에 들어섰다. 화면을 탭해 이동하세요.');
     return game;
@@ -116,15 +156,31 @@ class Game {
     newItemsUnderfoot = false;
     final cost = _perform(action, player);
     if (cost == null) return false;
-    lastActionCost = cost;
+    // 가속·둔화는 플레이어 행동 시간에 곱해진다.
+    final adjusted = max(1, (cost * player.actionTimeMultiplier).round());
+    lastActionCost = adjusted;
     if (player.pos != from) _noticeItemsUnderfoot();
-    _advanceTime(cost);
+    _advanceTime(adjusted);
     return true;
+  }
+
+  /// 물약 종류를 빈도([Potion.weight])에 따라 하나 고른다.
+  static Potion randomPotion(Random rng) {
+    final total = Potion.values.fold(0, (sum, p) => sum + p.weight);
+    var roll = rng.nextInt(total);
+    for (final p in Potion.values) {
+      roll -= p.weight;
+      if (roll < 0) return p;
+    }
+    return Potion.values.last;
   }
 
   // ── 바닥 아이템 ──
   /// 시작 방이 아닌 방에 장비가 놓일 확률.
   static const itemChancePerRoom = 0.4;
+
+  /// 시작 방이 아닌 방에 물약이 놓일 확률.
+  static const potionChancePerRoom = 0.5;
 
   final Map<Pos, List<Item>> _floorItems = {};
 
@@ -167,7 +223,7 @@ class Game {
     final items = itemsAt(player.pos);
     if (items.isEmpty) return;
     newItemsUnderfoot = _noticedPiles.add(player.pos);
-    final names = items.map((i) => i.name).join(', ');
+    final names = items.map(nameOf).join(', ');
     message('여기에 ${iGa(names)} 있다.');
   }
 
@@ -239,6 +295,8 @@ class Game {
 
   void _advanceTime(int aut) {
     time += aut;
+    _tickStatuses(aut);
+    if (isGameOver) return;
     _regenerate(aut);
     updateFov();
 
@@ -258,9 +316,52 @@ class Game {
     updateFov();
   }
 
+  /// 상태 효과 시간을 줄이고, 끝난 효과를 알린다. 중독은 10 aut마다 HP -1.
+  void _tickStatuses(int aut) {
+    final p = player;
+    if (p.has(Status.poison)) {
+      p.poisonProgress += min(aut, p.statuses[Status.poison]!);
+      while (p.poisonProgress >= autPerTurn && p.isAlive) {
+        p.poisonProgress -= autPerTurn;
+        p.hp--;
+      }
+      if (!p.isAlive) {
+        message('당신은 독으로 죽었다...');
+        return;
+      }
+    }
+    for (final status in [...p.statuses.keys]) {
+      final left = p.statuses[status]! - aut;
+      if (left > 0) {
+        p.statuses[status] = left;
+      } else {
+        p.statuses.remove(status);
+        if (status == Status.poison) p.poisonProgress = 0;
+        message(status.expireMessage);
+      }
+    }
+  }
+
+  /// 이 층의 바닥·문과 그 둘레 벽을 모두 본 것으로 표시 (깨달음 물약).
+  void revealMap() {
+    for (var y = 0; y < map.height; y++) {
+      for (var x = 0; x < map.width; x++) {
+        final p = Pos(x, y);
+        if (map[p] == TileType.wall &&
+            !Direction.all.any(
+              (d) => map.contains(p + d) && map[p + d] != TileType.wall,
+            )) {
+          continue;
+        }
+        map.markExplored(p);
+      }
+    }
+  }
+
   void _regenerate(int aut) {
     final p = player;
-    if (p.hp >= p.maxHp) {
+    // 중독 중에는 HP가 재생되지 않는다.
+    if (p.hp >= p.maxHp || p.has(Status.poison)) {
       p.hpRegenProgress = 0;
     } else {
       p.hpRegenProgress += aut;
@@ -297,12 +398,13 @@ class Game {
       message('${eulReul(victim.name)} 죽였다!');
       if (killer.isPlayer && victim is Monster) {
         kills++;
-        _grantXp(victim.type.xp);
+        grantXp(victim.type.xp);
       }
     }
   }
 
-  void _grantXp(int amount) {
+  /// 경험치를 주고 캐릭터 레벨·숙련도 상승을 알린다.
+  void grantXp(int amount) {
     for (final (skill, level) in player.skills.train(amount)) {
       message('${skill.label} 숙련도가 ${numberIGa(level)} 되었다.');
     }

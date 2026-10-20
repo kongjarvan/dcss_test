@@ -1,10 +1,12 @@
 import 'dart:math';
 
 import '../entity/actor.dart';
+import '../entity/status.dart';
 import '../game.dart';
 import '../items/item.dart';
 import '../geometry.dart';
 import '../korean.dart';
+import '../progression/experience.dart';
 import '../time/energy.dart';
 import '../world/tile.dart';
 
@@ -214,18 +216,19 @@ class PickUpAction extends Action {
       game.message('여기에는 주울 것이 없다.');
       return ActionResult.failure;
     }
-    final picked = <Item>[];
+    final picked = <String>[];
     for (final item in [...items]) {
-      if (actor.isInventoryFull) break;
+      // 이름은 줍기 전에 정한다 (겹치면 아이템 묶음이 합쳐진다).
+      final name = game.nameOf(item);
+      if (!actor.addItem(item)) break;
       game.removeFloorItem(actor.pos, item);
-      actor.inventory.add(item);
-      picked.add(item);
+      picked.add(name);
     }
     if (picked.isEmpty) {
       game.message('소지품이 가득 찼다.');
       return ActionResult.failure;
     }
-    game.message('${eulReul(picked.map((i) => i.name).join(', '))} 주웠다.');
+    game.message('${eulReul(picked.join(', '))} 주웠다.');
     if (game.itemsAt(actor.pos).isNotEmpty) {
       game.message('소지품이 가득 차 나머지는 줍지 못했다.');
     }
@@ -233,7 +236,7 @@ class PickUpAction extends Action {
   }
 }
 
-/// 소지품의 아이템을 발밑에 내려놓는다. 장착 중이면 먼저 해제해야 한다.
+/// 소지품의 아이템(묶음 전체)을 발밑에 내려놓는다. 장착 중이면 먼저 해제해야 한다.
 class DropAction extends Action {
   const DropAction(this.item);
 
@@ -250,7 +253,7 @@ class DropAction extends Action {
     }
     actor.inventory.remove(item);
     game.addFloorItem(actor.pos, item, noticed: true);
-    game.message('${eulReul(item.name)} 내려놓았다.');
+    game.message('${eulReul(game.nameOf(item))} 내려놓았다.');
     return const ActionResult.success(autPerTurn);
   }
 }
@@ -263,7 +266,9 @@ class EquipAction extends Action {
 
   @override
   ActionResult perform(Game game, Actor actor) {
+    final type = item.type;
     if (actor is! Player ||
+        type is! EquipmentType ||
         !actor.inventory.contains(item) ||
         actor.isEquipped(item)) {
       return ActionResult.failure;
@@ -273,9 +278,9 @@ class EquipAction extends Action {
       game.message(problem);
       return ActionResult.failure;
     }
-    final previous = actor.equipped(item.type.slot);
+    final previous = actor.equipped(type.slot);
     actor.equip(item);
-    final verb = switch (item.type) {
+    final verb = switch (type) {
       WeaponType() => '손에 들었다',
       ArmourType() => '입었다',
       ShieldType() => '들었다',
@@ -283,7 +288,7 @@ class EquipAction extends Action {
     final instead = previous == null ? '' : '${previous.name} 대신 ';
     game.message('$instead${eulReul(item.name)} $verb.');
     return ActionResult.success(
-      item.type.equipTime + (previous?.type.equipTime ?? 0),
+      type.equipTime + ((previous?.type as EquipmentType?)?.equipTime ?? 0),
     );
   }
 }
@@ -299,11 +304,91 @@ class UnequipAction extends Action {
     if (actor is! Player) return ActionResult.failure;
     final item = actor.unequip(slot);
     if (item == null) return ActionResult.failure;
-    final verb = switch (item.type) {
+    final type = item.type as EquipmentType;
+    final verb = switch (type) {
       WeaponType() => '집어넣었다',
       ArmourType() || ShieldType() => '벗었다',
     };
     game.message('${eulReul(item.name)} $verb.');
-    return ActionResult.success(item.type.equipTime);
+    return ActionResult.success(type.equipTime);
+  }
+}
+
+/// 물약을 마신다 (1턴). 마시면 그 물약 종류가 식별된다.
+class QuaffAction extends Action {
+  const QuaffAction(this.item);
+
+  final Item item;
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    final type = item.type;
+    if (actor is! Player ||
+        type is! PotionType ||
+        !actor.inventory.contains(item)) {
+      return ActionResult.failure;
+    }
+    final potion = type.potion;
+    final shownName = game.nameOf(item, withCount: false);
+    final wasKnown = game.identifiedPotions.contains(potion);
+    actor.consume(item);
+    game.identifiedPotions.add(potion);
+    game.message(
+      wasKnown
+          ? '${eulReul(shownName)} 마셨다.'
+          : '${eulReul(shownName)} 마셨다. ${potion.label}이었다!',
+    );
+    _applyPotion(game, actor, potion);
+    return const ActionResult.success(autPerTurn);
+  }
+
+  static int _turns(Random rng, int min, int max) =>
+      (min + rng.nextInt(max - min + 1)) * autPerTurn;
+
+  static void _applyPotion(Game game, Player p, Potion potion) {
+    final rng = game.rng;
+    switch (potion) {
+      case Potion.curing:
+        p.hp = min(p.maxHp, p.hp + 5 + rng.nextInt(7));
+        game.message('몸이 한결 나아졌다.');
+        if (p.statuses.remove(Status.poison) != null) {
+          p.poisonProgress = 0;
+          game.message('독이 사라졌다.');
+        }
+      case Potion.healWounds:
+        p.hp = min(p.maxHp, p.hp + 15 + rng.nextInt(11));
+        game.message('상처가 아물었다.');
+      case Potion.magic:
+        p.mp = min(p.maxMp, p.mp + 8 + rng.nextInt(6));
+        game.message('마력이 차오른다.');
+      case Potion.haste:
+        p.addStatus(Status.haste, _turns(rng, 30, 45));
+        game.message('몸이 빨라졌다!');
+      case Potion.might:
+        p.addStatus(Status.might, _turns(rng, 35, 50));
+        game.message('힘이 솟는다!');
+      case Potion.agility:
+        p.addStatus(Status.agility, _turns(rng, 35, 50));
+        game.message('몸이 가벼워졌다!');
+      case Potion.brilliance:
+        p.addStatus(Status.brilliance, _turns(rng, 35, 50));
+        game.message('머리가 맑아졌다!');
+      case Potion.slowing:
+        p.addStatus(Status.slow, _turns(rng, 15, 25));
+        game.message('몸이 느려졌다...');
+      case Potion.poison:
+        p.addStatus(Status.poison, _turns(rng, 8, 14));
+        game.message('독이다! 속이 뒤틀린다.');
+      case Potion.experience:
+        if (p.isMaxLevel) {
+          game.message('아무 일도 일어나지 않았다.');
+        } else {
+          game.message('깨달음이 밀려온다!');
+          game.grantXp(Experience.totalForLevel(p.level + 1) - p.xp);
+        }
+      case Potion.enlightenment:
+        game.revealMap();
+        game.message('이 층의 구조가 머릿속에 떠오른다.');
+    }
   }
 }
