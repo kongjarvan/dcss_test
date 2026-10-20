@@ -18,6 +18,7 @@ IconData attributeIcon(Attribute attribute) => switch (attribute) {
   Attribute.strength => Icons.fitness_center,
   Attribute.dexterity => Icons.air,
   Attribute.intelligence => Icons.psychology,
+  Attribute.faith => Icons.church,
 };
 
 /// 캐릭터 창을 연다.
@@ -115,6 +116,8 @@ class CharacterSheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('경험치 $nextXp', style: dim),
+            const SizedBox(height: 12),
+            _PietyRow(piety: player.piety, rank: player.pietyRank),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -154,7 +157,8 @@ String _percent(double multiplier) {
 /// 능력치를 1 올릴 때 얻는 것. 예) "올리면 HP +1, MP +3"
 String increaseGainText(Attribute attribute) {
   final g = AttributeEffects.gainOnIncrease(attribute);
-  return [if (g.hp > 0) 'HP +${g.hp}', if (g.mp > 0) 'MP +${g.mp}'].join(', ');
+  final parts = [if (g.hp > 0) 'HP +${g.hp}', if (g.mp > 0) 'MP +${g.mp}'];
+  return parts.isEmpty ? '증가량 미정' : parts.join(', ');
 }
 
 String _signed(num n) => '${n >= 0 ? '+' : ''}$n';
@@ -181,6 +185,12 @@ List<AttributeEffectLine> attributeEffectLines(Attribute attribute, int value) {
         (label: '주문 성공률', value: '${_signed((AttributeEffects.spellSuccessBonus(value) * 100).round())}%p', active: false),
         (label: '주문 피해', value: _percent(AttributeEffects.spellDamageMultiplier(value)), active: false),
         (label: '마나 소모', value: _percent(AttributeEffects.manaCostMultiplier(value)), active: false),
+      ];
+    case Attribute.faith:
+      return [
+        (label: '권능 위력', value: _percent(AttributeEffects.invocationPowerMultiplier(value)), active: false),
+        (label: '권능 성공률', value: '${_signed((AttributeEffects.invocationSuccessBonus(value) * 100).round())}%p', active: false),
+        (label: '신앙심 소모', value: _percent(AttributeEffects.pietyCostMultiplier(value)), active: false),
       ];
   }
 }
@@ -234,6 +244,32 @@ class _AttributeRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 신앙심을 DCSS처럼 ★ 6단계로 표시.
+class _PietyRow extends StatelessWidget {
+  const _PietyRow({required this.piety, required this.rank});
+
+  final int piety;
+  final int rank;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Text('신앙심', style: TextStyle(color: Color(0xFF8A8478), fontSize: 13)),
+        const SizedBox(width: 8),
+        for (var i = 0; i < Player.pietyRankThresholds.length; i++)
+          Icon(
+            i < rank ? Icons.star : Icons.star_border,
+            size: 18,
+            color: i < rank ? const Color(0xFFFFD54F) : const Color(0xFF4A453E),
+          ),
+        const SizedBox(width: 8),
+        Text('$piety / ${Player.maxPiety}', style: const TextStyle(color: Color(0xFF8A8478), fontSize: 13)),
+      ],
     );
   }
 }

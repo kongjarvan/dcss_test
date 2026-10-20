@@ -86,6 +86,32 @@ class Player extends Actor {
   int maxMp = baseMp;
   int mp = baseMp;
 
+  /// 신앙심 최대치 (DCSS와 같음).
+  static const maxPiety = 200;
+
+  /// ★ 단계 기준값. 이 값 이상이면 ★1 … ★6 (DCSS와 같음).
+  static const pietyRankThresholds = [30, 50, 75, 100, 120, 160];
+
+  /// 신앙심. 권능을 쓸 때 소모한다.
+  int piety = 0;
+
+  /// 신앙심 ★ 단계 (0~6).
+  int get pietyRank => pietyRankThresholds.where((t) => piety >= t).length;
+
+  void gainPiety(int amount) => piety = (piety + amount).clamp(0, maxPiety);
+
+  /// 권능 사용 시 실제 소모되는 신앙심. 신앙이 높을수록 적다.
+  int pietyCostFor(int baseCost) =>
+      AttributeEffects.pietyCost(baseCost, attributes[Attribute.faith]);
+
+  /// 권능 비용([baseCost])만큼 신앙심을 소모. 부족하면 false.
+  bool spendPiety(int baseCost) {
+    final cost = pietyCostFor(baseCost);
+    if (piety < cost) return false;
+    piety -= cost;
+    return true;
+  }
+
   int hpRegenProgress = 0;
   int mpRegenProgress = 0;
 

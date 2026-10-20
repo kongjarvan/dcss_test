@@ -22,6 +22,7 @@ abstract final class AttributeEffects {
   static const dexterityHpGain = 2;
   static const intelligenceHpGain = 1;
   static const intelligenceMpGain = 3;
+  static const faithHpGain = 2;
 
   // ── 민첩 ──
   /// 체력 재생 속도: 1포인트당 +3%
@@ -52,6 +53,16 @@ abstract final class AttributeEffects {
   /// 마나 소모: 1포인트당 -2% (최대 50%까지 감소)
   static const manaCostReductionPerPoint = 0.02;
 
+  // ── 신앙 ──
+  /// 권능 위력: 1포인트당 +3%
+  static const invocationPowerPerPoint = 0.03;
+
+  /// 권능 성공률: 1포인트당 +2%p
+  static const invocationSuccessPerPoint = 0.02;
+
+  /// 권능의 신앙심 소모: 1포인트당 -2% (최대 50%까지 감소)
+  static const pietyCostReductionPerPoint = 0.02;
+
   static int _delta(int value) => value - neutral;
 
   /// [attribute]를 1 올릴 때 늘어나는 최대 HP / MP.
@@ -63,6 +74,7 @@ abstract final class AttributeEffects {
           hp: intelligenceHpGain,
           mp: intelligenceMpGain,
         ),
+        Attribute.faith => (hp: faithHpGain, mp: 0),
       };
 
   /// 1 + delta × rate, 단 [min] 미만으로는 내려가지 않음.
@@ -123,6 +135,21 @@ abstract final class AttributeEffects {
       math.max(1, (baseCost * manaCostMultiplier(intelligence)).round());
 
   /// 기본 전투 수치에 민첩(명중·회피)을 반영한다.
+  // ── 신앙 ──
+  static double invocationPowerMultiplier(int faith) =>
+      _bonus(faith, invocationPowerPerPoint);
+
+  /// 권능 성공률에 더하는 값 (0.02 = +2%p).
+  static double invocationSuccessBonus(int faith) =>
+      _delta(faith) * invocationSuccessPerPoint;
+
+  static double pietyCostMultiplier(int faith) =>
+      _reduction(faith, pietyCostReductionPerPoint);
+
+  /// 권능의 신앙심 소모량에 신앙을 반영한 값. 최소 1.
+  static int pietyCost(int baseCost, int faith) =>
+      math.max(1, (baseCost * pietyCostMultiplier(faith)).round());
+
   static CombatStats applyTo(CombatStats base, Attributes attributes) {
     final dex = attributes[Attribute.dexterity];
     return CombatStats(

@@ -9,10 +9,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('종족별 능력치 합은 모두 같다 (30)', () {
+  test('종족별 능력치 합은 모두 같다 (40)', () {
     for (final s in Species.values) {
       final sum = Attribute.values.map(s.baseValue).reduce((a, b) => a + b);
-      expect(sum, 30, reason: s.name);
+      expect(sum, 40, reason: s.name);
+    }
+  });
+
+  test('종족별 시작 능력치', () {
+    for (final (s, str, dex, intel, faith) in const [
+      (Species.human, 10, 10, 10, 10),
+      (Species.elf, 6, 12, 12, 10),
+      (Species.dwarf, 13, 11, 8, 8),
+    ]) {
+      final a = s.createAttributes();
+      expect(
+        [
+          a[Attribute.strength],
+          a[Attribute.dexterity],
+          a[Attribute.intelligence],
+          a[Attribute.faith],
+        ],
+        [str, dex, intel, faith],
+        reason: s.name,
+      );
     }
   });
 
@@ -24,10 +44,10 @@ void main() {
     expect(e.dexterity, greaterThan(h.dexterity));
     expect(e.intelligence, greaterThan(h.intelligence));
     expect(e.strength, lessThan(h.strength));
-    // 드워프: 힘 높음, 민첩 평균, 지능 조금 낮음
+    // 드워프: 힘 높음, 지능·신앙 조금 낮음
     expect(d.strength, greaterThan(h.strength));
-    expect(d.dexterity, h.dexterity);
     expect(d.intelligence, lessThan(h.intelligence));
+    expect(d.faith, lessThan(h.faith));
   });
 
   test('선택한 종족의 능력치로 게임이 시작된다', () {

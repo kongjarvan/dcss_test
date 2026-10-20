@@ -193,8 +193,9 @@ class Game {
       if (gain.hp > 0) '최대 HP +${gain.hp}',
       if (gain.mp > 0) '최대 MP +${gain.mp}',
     ].join(', ');
+    final suffix = bonus.isEmpty ? '' : ' ($bonus)';
     message(
-      '${iGa(attribute.label)} ${numberIGa(player.attributes[attribute])} 되었다. ($bonus)',
+      '${iGa(attribute.label)} ${numberIGa(player.attributes[attribute])} 되었다.$suffix',
     );
     return true;
   }

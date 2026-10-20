@@ -2,7 +2,7 @@ import 'attributes.dart';
 
 /// 플레이어 종족.
 ///
-/// 시작 능력치는 세 값의 합이 30이 되도록 맞춰 성향만 다르게 한다.
+/// 시작 능력치는 합이 같도록(40) 맞춰 성향만 다르게 한다.
 /// 적성(기술별 숙련 속도)은 적성 시스템을 만들 때 여기에 항목을 추가한다.
 enum Species {
   human(
@@ -11,6 +11,7 @@ enum Species {
     strength: 10,
     dexterity: 10,
     intelligence: 10,
+    faith: 10,
   ),
   elf(
     name: '엘프',
@@ -18,13 +19,15 @@ enum Species {
     strength: 6,
     dexterity: 12,
     intelligence: 12,
+    faith: 10,
   ),
   dwarf(
     name: '드워프',
-    description: '강인한 힘을 지녔지만 학문에는 다소 서툴다. 근접전에 강하다.',
-    strength: 12,
-    dexterity: 10,
+    description: '강인한 힘을 지녔지만 학문과 신앙에는 다소 서툴다. 근접전에 강하다.',
+    strength: 13,
+    dexterity: 11,
     intelligence: 8,
+    faith: 8,
   );
 
   const Species({
@@ -33,6 +36,7 @@ enum Species {
     required this.strength,
     required this.dexterity,
     required this.intelligence,
+    required this.faith,
   });
 
   final String name;
@@ -40,16 +44,19 @@ enum Species {
   final int strength;
   final int dexterity;
   final int intelligence;
+  final int faith;
 
   int baseValue(Attribute attribute) => switch (attribute) {
     Attribute.strength => strength,
     Attribute.dexterity => dexterity,
     Attribute.intelligence => intelligence,
+    Attribute.faith => faith,
   };
 
   Attributes createAttributes() => Attributes(
     strength: strength,
     dexterity: dexterity,
     intelligence: intelligence,
+    faith: faith,
   );
 }

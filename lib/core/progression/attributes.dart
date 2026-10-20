@@ -5,7 +5,8 @@
 enum Attribute {
   strength('힘'),
   dexterity('민첩'),
-  intelligence('지능');
+  intelligence('지능'),
+  faith('신앙');
 
   const Attribute(this.label);
 
@@ -13,12 +14,17 @@ enum Attribute {
 }
 
 class Attributes {
-  Attributes({int strength = 10, int dexterity = 10, int intelligence = 10})
-    : _values = {
-        Attribute.strength: strength,
-        Attribute.dexterity: dexterity,
-        Attribute.intelligence: intelligence,
-      };
+  Attributes({
+    int strength = 10,
+    int dexterity = 10,
+    int intelligence = 10,
+    int faith = 10,
+  }) : _values = {
+         Attribute.strength: strength,
+         Attribute.dexterity: dexterity,
+         Attribute.intelligence: intelligence,
+         Attribute.faith: faith,
+       };
 
   final Map<Attribute, int> _values;
 

@@ -65,6 +65,7 @@ void main() {
       (Attribute.strength, 4, 0),
       (Attribute.dexterity, 2, 0),
       (Attribute.intelligence, 1, 3),
+      (Attribute.faith, 2, 0),
     ]) {
       test('${attribute.label}을 올리면 최대 HP +$hp, 최대 MP +$mp', () {
         final p = Player(pos: const Pos(0, 0));
