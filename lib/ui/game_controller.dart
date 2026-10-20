@@ -6,6 +6,7 @@ import '../core/action/action.dart';
 import '../core/game.dart';
 import '../core/geometry.dart';
 import '../core/progression/attributes.dart';
+import '../core/progression/job.dart';
 import '../core/progression/species.dart';
 
 /// 자동 이동 종류.
@@ -22,8 +23,8 @@ enum AutoMoveMode {
 
 /// 입력(탭, 버튼)을 게임 행동으로 바꾸고 화면 갱신을 알린다.
 class GameController extends ChangeNotifier {
-  GameController({int? seed, Species species = Species.human})
-    : _game = Game.newGame(seed: seed, species: species);
+  GameController({int? seed, Species species = Species.human, Job? job})
+    : _game = Game.newGame(seed: seed, species: species, job: job);
 
   static const _autoMoveInterval = Duration(milliseconds: 70);
   static const _restInterval = Duration(milliseconds: 20);

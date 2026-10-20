@@ -97,7 +97,7 @@ class CharacterSheet extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  '${player.species.name} · 레벨 ${player.level}',
+                  '${[player.species.name, ?player.job?.name].join(' ')} · 레벨 ${player.level}',
                   style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),

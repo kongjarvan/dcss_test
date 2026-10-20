@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/game.dart';
 import '../core/message_log.dart';
+import '../core/progression/job.dart';
 import '../core/progression/species.dart';
 import '../core/time/energy.dart';
 import '../render/map_painter.dart';
@@ -19,6 +20,7 @@ class GameScreen extends StatefulWidget {
     super.key,
     this.seed,
     this.species = Species.human,
+    this.job,
     this.controller,
   });
 
@@ -26,6 +28,8 @@ class GameScreen extends StatefulWidget {
   final int? seed;
 
   final Species species;
+
+  final Job? job;
 
   /// 외부에서 만든 컨트롤러 (테스트용). null이면 직접 만든다.
   final GameController? controller;
@@ -37,7 +41,11 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   late final GameController _controller =
       widget.controller ??
-      GameController(seed: widget.seed, species: widget.species);
+      GameController(
+        seed: widget.seed,
+        species: widget.species,
+        job: widget.job,
+      );
   static const _renderer = ProceduralTileRenderer();
 
   /// 맵 확대 배율. 1.0 = 시야 전체가 화면에 들어오는 크기.

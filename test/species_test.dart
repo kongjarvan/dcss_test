@@ -2,6 +2,7 @@ import 'package:dc_test/core/entity/actor.dart';
 import 'package:dc_test/core/game.dart';
 import 'package:dc_test/core/geometry.dart';
 import 'package:dc_test/core/progression/attributes.dart';
+import 'package:dc_test/core/progression/job.dart';
 import 'package:dc_test/core/progression/species.dart';
 import 'package:dc_test/main.dart';
 import 'package:dc_test/ui/game_screen.dart';
@@ -61,7 +62,11 @@ void main() {
     expect(game.player.stats.evasion, base.evasion + 1);
   });
 
-  testWidgets('앱을 켜면 종족 선택 화면, 고르면 게임 시작', (tester) async {
+  testWidgets('종족 선택 → 직업 선택 → 게임 시작, 새 게임은 종족 선택부터', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2280);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(const DungeonApp(seed: 42));
     expect(find.text('종족 선택'), findsOneWidget);
     for (final s in Species.values) {
@@ -70,8 +75,23 @@ void main() {
 
     await tester.tap(find.text('드워프'));
     await tester.pumpAndSettle();
+    expect(find.text('드워프 · 직업 선택'), findsOneWidget);
+    for (final j in Job.values) {
+      expect(find.text(j.name), findsOneWidget);
+    }
+
+    // 뒤로 가기 → 종족을 다시 고를 수 있다.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('종족 선택'), findsOneWidget);
+
+    await tester.tap(find.text('드워프'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('전사'));
+    await tester.pumpAndSettle();
     expect(find.byType(GameScreen), findsOneWidget);
     expect(find.text('종족 선택'), findsNothing);
+    expect(find.text('드워프 · 직업 선택'), findsNothing);
 
     // 새 게임 → 확인 → 다시 종족 선택 화면
     await tester.tap(find.byTooltip('새 게임'));

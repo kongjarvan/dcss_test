@@ -11,6 +11,7 @@ import 'korean.dart';
 import 'message_log.dart';
 import 'progression/attribute_effects.dart';
 import 'progression/attributes.dart';
+import 'progression/job.dart';
 import 'progression/species.dart';
 import 'time/energy.dart';
 import 'world/dungeon_generator.dart';
@@ -27,10 +28,14 @@ class Game {
     updateFov();
   }
 
-  factory Game.newGame({int? seed, Species species = Species.human}) {
+  factory Game.newGame({int? seed, Species species = Species.human, Job? job}) {
     final rng = Random(seed ?? DateTime.now().microsecondsSinceEpoch);
     final level = DungeonGenerator(rng).generate();
-    final player = Player(pos: level.rooms.first.center, species: species);
+    final player = Player(
+      pos: level.rooms.first.center,
+      species: species,
+      job: job,
+    );
     final monsters = <Monster>[];
 
     for (final room in level.rooms.skip(1)) {

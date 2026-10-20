@@ -4,7 +4,7 @@ import '../core/progression/attribute_effects.dart';
 import '../core/progression/attributes.dart';
 import '../core/progression/species.dart';
 import 'character_sheet.dart';
-import 'game_screen.dart';
+import 'job_select_screen.dart';
 
 IconData speciesIcon(Species species) => switch (species) {
   Species.human => Icons.person,
@@ -19,10 +19,11 @@ class SpeciesSelectScreen extends StatelessWidget {
   /// 고정 시드 (테스트/디버깅용).
   final int? seed;
 
-  /// 현재 화면을 종족 선택 화면으로 교체한다 (새 게임/다시 시작).
+  /// 모든 화면을 닫고 종족 선택부터 다시 시작한다 (새 게임/다시 시작).
   static void open(BuildContext context) {
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const SpeciesSelectScreen()),
+      (_) => false,
     );
   }
 
@@ -47,9 +48,11 @@ class SpeciesSelectScreen extends StatelessWidget {
             for (final species in Species.values) ...[
               _SpeciesCard(
                 species: species,
-                onSelect: () => Navigator.of(context).pushReplacement(
+                // 직업 선택으로. 뒤로 가기로 종족을 다시 고를 수 있다.
+                onSelect: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => GameScreen(seed: seed, species: species),
+                    builder: (_) =>
+                        JobSelectScreen(species: species, seed: seed),
                   ),
                 ),
               ),
@@ -104,17 +107,7 @@ class _SpeciesCard extends StatelessWidget {
                 style: const TextStyle(color: Color(0xFFBDB6A8), fontSize: 14),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  for (final a in Attribute.values)
-                    Expanded(
-                      child: _StatChip(
-                        attribute: a,
-                        value: species.baseValue(a),
-                      ),
-                    ),
-                ],
-              ),
+              AttributeGrid(valueOf: species.baseValue),
             ],
           ),
         ),
@@ -123,11 +116,19 @@ class _SpeciesCard extends StatelessWidget {
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({required this.attribute, required this.value});
+/// 능력치 값 표시. 기준값(10)보다 높으면 초록, 낮으면 빨강.
+/// [bonus]가 있으면 값 옆에 (+3)처럼 보정치를 함께 표시한다.
+class AttributeValueChip extends StatelessWidget {
+  const AttributeValueChip({
+    super.key,
+    required this.attribute,
+    required this.value,
+    this.bonus = 0,
+  });
 
   final Attribute attribute;
   final int value;
+  final int bonus;
 
   @override
   Widget build(BuildContext context) {
@@ -137,26 +138,72 @@ class _StatChip extends StatelessWidget {
         : value < AttributeEffects.neutral
         ? const Color(0xFFE57373)
         : const Color(0xFFD8CFBF);
-    return Row(
-      children: [
-        Icon(
-          attributeIcon(attribute),
-          size: 16,
-          color: const Color(0xFF8A8478),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '${attribute.label} ',
-          style: const TextStyle(color: Color(0xFF8A8478), fontSize: 13),
-        ),
-        Text(
-          '$value',
-          style: TextStyle(
-            color: color,
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
+    // 좁은 화면에서는 넘치지 않게 글자를 줄인다.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            attributeIcon(attribute),
+            size: 16,
+            color: const Color(0xFF8A8478),
           ),
-        ),
+          const SizedBox(width: 4),
+          Text(
+            '${attribute.label} ',
+            style: const TextStyle(color: Color(0xFF8A8478), fontSize: 13),
+          ),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (bonus != 0)
+            Text(
+              ' (${bonus > 0 ? '+' : ''}$bonus)',
+              style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 11),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 능력치를 2 × 2로 표시. 한 줄에 4개는 휴대폰 화면에서 좁다.
+class AttributeGrid extends StatelessWidget {
+  const AttributeGrid({super.key, required this.valueOf, this.bonusOf});
+
+  final int Function(Attribute) valueOf;
+
+  /// 값 옆에 표시할 보정치 (예: 직업 보정).
+  final int Function(Attribute)? bonusOf;
+
+  @override
+  Widget build(BuildContext context) {
+    const values = Attribute.values;
+    return Column(
+      children: [
+        for (var i = 0; i < values.length; i += 2)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                for (final a in values.skip(i).take(2))
+                  Expanded(
+                    child: AttributeValueChip(
+                      attribute: a,
+                      value: valueOf(a),
+                      bonus: bonusOf?.call(a) ?? 0,
+                    ),
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }
