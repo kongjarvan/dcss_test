@@ -89,7 +89,6 @@ List<GameActionButton> actionsFor(
   required VoidCallback openCharacterSheet,
   required VoidCallback openSkills,
   required VoidCallback openInventory,
-  required VoidCallback openEquipment,
   required VoidCallback openQuaff,
 }) {
   switch (category) {
@@ -157,11 +156,6 @@ List<GameActionButton> actionsFor(
           label: '소지품',
           icon: Icons.inventory_2,
           onPressed: openInventory,
-        ),
-        GameActionButton(
-          label: '장비',
-          icon: Icons.shield,
-          onPressed: openEquipment,
         ),
       ];
     case ActionCategory.skill:
@@ -241,8 +235,6 @@ class _ActionBarState extends State<ActionBar> {
                             SkillsScreen.open(context, controller),
                         openInventory: () =>
                             InventoryScreen.open(context, controller),
-                        openEquipment: () =>
-                            EquipmentScreen.open(context, controller),
                         openQuaff: () => showQuaffSheet(context, controller),
                       ).indexed) ...[
                         if (i > 0) const SizedBox(width: 6),

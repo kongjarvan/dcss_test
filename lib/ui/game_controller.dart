@@ -114,6 +114,9 @@ class GameController extends ChangeNotifier {
       !_game.isGameOver && _game.itemsAt(_game.player.pos).isNotEmpty;
 
   void pickUp() => _act(const PickUpAction());
+
+  /// 발밑 아이템 중 [item] 하나만 줍는다.
+  void pickUpItem(Item item) => _act(PickUpAction(only: item));
   void equip(Item item) => _act(EquipAction(item));
   void unequip(EquipSlot slot) => _act(UnequipAction(slot));
   void drop(Item item) => _act(DropAction(item));
@@ -223,8 +226,20 @@ class GameController extends ChangeNotifier {
       return;
     }
 
-    // 탐험 중이면 목표에 도착했거나 목표가 더 이상 경계가 아닐 때 새 목표를 찾는다.
     if (_autoMoveMode == AutoMoveMode.explore) {
+      // 발밑에 자동 줍기 대상(해롭다고 밝혀지지 않은 물약)이 있으면 줍고 계속 간다.
+      final here = _game.player.pos;
+      if (_game.itemsAt(here).any(_game.shouldAutoPickUp)) {
+        if (!_game.playerAct(const PickUpAction(autoOnly: true))) {
+          stopTravel(); // 소지품이 가득 참
+          return;
+        }
+        if (_game.visibleMonsters.isNotEmpty) _stopAutoMove();
+        notifyListeners();
+        return;
+      }
+
+      // 목표에 도착했거나 목표가 더 이상 탐험 목표가 아니면 새 목표를 찾는다.
       final target = _travelTarget;
       if (target == null ||
           target == _game.player.pos ||
@@ -260,7 +275,13 @@ class GameController extends ChangeNotifier {
     final arrived =
         _autoMoveMode == AutoMoveMode.travel && _game.player.pos == dest;
     // 처음 보는 아이템 위에 올라서면 멈춰서 주울지 고를 수 있게 한다.
-    final onItems = _game.newItemsUnderfoot;
+    // 단 탐험 중 자동으로 주울 물약뿐이면 멈추지 않는다 (다음 걸음에서 줍는다).
+    final onItems =
+        _game.newItemsUnderfoot &&
+        (_autoMoveMode != AutoMoveMode.explore ||
+            _game
+                .itemsAt(_game.player.pos)
+                .any((i) => !_game.shouldAutoPickUp(i)));
     if (!acted ||
         arrived ||
         onItems ||

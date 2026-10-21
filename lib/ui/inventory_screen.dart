@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../core/entity/actor.dart';
 import '../core/game.dart';
 import '../core/items/item.dart';
-import '../core/progression/skill_effects.dart';
-import '../core/progression/skills.dart';
 import '../core/time/energy.dart';
 import '../render/tile_renderer.dart';
 import 'game_controller.dart';
@@ -144,88 +142,149 @@ class InventoryScreen extends StatelessWidget {
       body: () {
         final items = player.inventory;
         return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.all(16),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                '${items.length} / ${Player.inventoryCapacity}칸 · 아이템을 누르면 장착·마시기·버리기를 할 수 있습니다.',
-                style: _dim,
-              ),
+            Text(
+              '${items.length} / ${Player.inventoryCapacity}칸 · 누르면 상세 정보, 길게 누르면 이름',
+              style: _dim,
             ),
-            if (items.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: Text('소지품이 비어 있다.', style: _dim)),
-              ),
-            for (final item in items)
-              _ItemTile(
-                game: controller.game,
-                item: item,
-                equipped: player.isEquipped(item),
-                onTap: () => _showItemSheet(context, item),
-              ),
+            const SizedBox(height: 12),
+            InventoryGrid(controller: controller, cellSize: 64),
           ],
         );
       },
     );
   }
+}
 
-  void _showItemSheet(BuildContext context, Item item) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF1A1714),
-      showDragHandle: true,
-      builder: (sheetContext) => ListenableBuilder(
-        listenable: controller,
-        builder: (sheetContext, _) =>
-            _ItemSheet(controller: controller, item: item),
+/// DCSS식 소지품 칸: 아이콘만 보이고, 누르면 상세 정보.
+/// 겹친 개수는 오른쪽 아래 숫자, 장착 중이면 노란 테두리. 빈 칸도 흐리게 보여준다.
+class InventoryGrid extends StatelessWidget {
+  const InventoryGrid({
+    super.key,
+    required this.controller,
+    this.cellSize = 44,
+    this.shrinkWrap = true,
+  });
+
+  final GameController controller;
+  final double cellSize;
+
+  /// 바깥에서 스크롤할 때(true)와 격자 자체가 스크롤할 때(false).
+  final bool shrinkWrap;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = controller.game;
+    final items = game.player.inventory;
+    return GridView.builder(
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+      padding: shrinkWrap ? EdgeInsets.zero : const EdgeInsets.all(8),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: cellSize,
+        mainAxisSpacing: 4,
+        crossAxisSpacing: 4,
       ),
+      itemCount: Player.inventoryCapacity,
+      itemBuilder: (context, i) => i < items.length
+          ? _ItemCell(
+              game: game,
+              item: items[i],
+              onTap: () => showItemSheet(context, controller, items[i]),
+            )
+          : const _EmptyCell(),
     );
   }
 }
 
-class _ItemTile extends StatelessWidget {
-  const _ItemTile({
+class _ItemCell extends StatelessWidget {
+  const _ItemCell({
     required this.game,
     required this.item,
-    required this.equipped,
     required this.onTap,
   });
 
   final Game game;
   final Item item;
-  final bool equipped;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final type = item.type;
-    return ListTile(
-      onTap: onTap,
-      leading: ItemIcon.of(game, item),
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              game.nameOf(item),
-              style: const TextStyle(color: Colors.white),
-            ),
+    final equipped = game.player.isEquipped(item);
+    return Tooltip(
+      message: game.nameOf(item),
+      child: Material(
+        color: const Color(0xFF2A2621),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: BorderSide(
+            color: equipped ? const Color(0xFFFFD54F) : const Color(0xFF3A342D),
+            width: equipped ? 2 : 1,
           ),
-          if (equipped && type is EquipmentType) ...[
-            const SizedBox(width: 8),
-            const Icon(Icons.check_circle, size: 16, color: Color(0xFFFFD54F)),
-            const SizedBox(width: 2),
-            Text(
-              type.slot == EquipSlot.weapon ? '든 것' : '착용',
-              style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 12),
-            ),
-          ],
-        ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: FittedBox(child: ItemIcon.of(game, item)),
+                ),
+              ),
+              if (item.quantity > 1)
+                Positioned(
+                  right: 3,
+                  bottom: 1,
+                  child: Text(
+                    '${item.quantity}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      shadows: [Shadow(blurRadius: 2)],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
-      subtitle: Text(itemSummary(game, item), style: _dim),
     );
   }
+}
+
+class _EmptyCell extends StatelessWidget {
+  const _EmptyCell();
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: const Color(0xFF1A1714),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: const Color(0xFF2A2621)),
+    ),
+  );
+}
+
+/// 아이템 상세 창 (장착/해제·마시기·버리기). 소지품 화면과 옆 패널에서 함께 쓴다.
+Future<void> showItemSheet(
+  BuildContext context,
+  GameController controller,
+  Item item,
+) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: const Color(0xFF1A1714),
+    showDragHandle: true,
+    builder: (sheetContext) => ListenableBuilder(
+      listenable: controller,
+      builder: (sheetContext, _) =>
+          _ItemSheet(controller: controller, item: item),
+    ),
+  );
 }
 
 /// 아이템 하나의 상세와 행동 버튼 (장비: 장착/해제·버리기, 물약: 마시기·버리기).
@@ -339,6 +398,137 @@ class _ItemSheet extends StatelessWidget {
   }
 }
 
+/// 발밑(바닥) 아이템의 상세 창. 줍기 버튼으로 그 아이템만 줍는다.
+Future<void> showFloorItemSheet(
+  BuildContext context,
+  GameController controller,
+  Item item,
+) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: const Color(0xFF1A1714),
+    showDragHandle: true,
+    builder: (sheetContext) => ListenableBuilder(
+      listenable: controller,
+      builder: (sheetContext, _) =>
+          _FloorItemSheet(controller: controller, item: item),
+    ),
+  );
+}
+
+class _FloorItemSheet extends StatelessWidget {
+  const _FloorItemSheet({required this.controller, required this.item});
+
+  final GameController controller;
+  final Item item;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = controller.game;
+    // 주웠거나 자리를 떠났으면 창을 닫는다.
+    if (!game.itemsAt(game.player.pos).contains(item)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+      return const SizedBox.shrink();
+    }
+    final full =
+        game.player.isInventoryFull &&
+        !game.player.inventory.any((owned) => owned.canStackWith(item));
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ItemIcon.of(game, item, size: 56),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        game.nameOf(item),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Text('바닥 · 줍는 데 1턴', style: _dim),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              itemSummary(game, item),
+              style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 14),
+            ),
+            if (full) ...[
+              const SizedBox(height: 8),
+              const Text(
+                '소지품이 가득 찼다.',
+                style: TextStyle(color: Color(0xFFE57373), fontSize: 13),
+              ),
+            ],
+            const SizedBox(height: 16),
+            IconButton.filled(
+              tooltip: full ? '줍기 · 소지품 가득' : '줍기',
+              iconSize: 28,
+              onPressed: full ? null : () => controller.pickUpItem(item),
+              icon: const Icon(Icons.pan_tool),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 발밑 아이템을 가로로 늘어놓은 아이콘 목록. 누르면 상세 창.
+class FloorItemStrip extends StatelessWidget {
+  const FloorItemStrip({super.key, required this.controller, this.size = 24});
+
+  final GameController controller;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final game = controller.game;
+    final items = game.itemsAt(game.player.pos);
+    return SizedBox(
+      height: size,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 4),
+        itemBuilder: (context, i) {
+          final item = items[i];
+          return Tooltip(
+            message: game.nameOf(item),
+            child: InkWell(
+              onTap: () => showFloorItemSheet(context, controller, item),
+              borderRadius: BorderRadius.circular(4),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A2621),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: ItemIcon.of(game, item, size: size),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// 물약 빠른 선택 창 (아이템 탭의 마시기 버튼). 누르면 바로 마시고 닫힌다.
 Future<void> showQuaffSheet(BuildContext context, GameController controller) {
   final game = controller.game;
@@ -370,151 +560,3 @@ Future<void> showQuaffSheet(BuildContext context, GameController controller) {
     ),
   );
 }
-
-// ───────────────────────── 장비 ─────────────────────────
-
-class EquipmentScreen extends StatelessWidget {
-  const EquipmentScreen({super.key, required this.controller});
-
-  final GameController controller;
-
-  static Future<void> open(BuildContext context, GameController controller) =>
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => EquipmentScreen(controller: controller),
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final player = controller.game.player;
-    return _screen(
-      title: '장비',
-      controller: controller,
-      body: () => ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          for (final slot in EquipSlot.values)
-            _SlotTile(
-              game: controller.game,
-              slot: slot,
-              item: player.equipped(slot),
-              onUnequip: () => controller.unequip(slot),
-            ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 20, 16, 4),
-            child: Text(
-              '전투 능력',
-              style: TextStyle(
-                color: Color(0xFFD8B04A),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          ...combatSummary(player).map(
-            (line) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-              child: Row(
-                children: [
-                  Expanded(child: Text(line.$1, style: _dim)),
-                  Text(
-                    line.$2,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SlotTile extends StatelessWidget {
-  const _SlotTile({
-    required this.game,
-    required this.slot,
-    required this.item,
-    required this.onUnequip,
-  });
-
-  final Game game;
-  final EquipSlot slot;
-  final Item? item;
-  final VoidCallback onUnequip;
-
-  @override
-  Widget build(BuildContext context) {
-    final item = this.item;
-    return ListTile(
-      leading: item == null
-          ? const SizedBox.square(
-              dimension: 40,
-              child: Icon(Icons.crop_square, color: Color(0xFF4A453E)),
-            )
-          : ItemIcon(item.type),
-      title: Text(
-        item?.name ?? (slot == EquipSlot.weapon ? '맨손' : '없음'),
-        style: TextStyle(
-          color: item == null ? const Color(0xFF8A8478) : Colors.white,
-        ),
-      ),
-      subtitle: Text(
-        item == null
-            ? slot.label
-            : '${slot.label} · ${itemSummary(game, item)}',
-        style: _dim,
-      ),
-      trailing: item == null
-          ? null
-          : IconButton(
-              tooltip: '해제',
-              onPressed: onUnequip,
-              icon: const Icon(
-                Icons.remove_circle_outline,
-                color: Color(0xFFBDB6A8),
-              ),
-            ),
-    );
-  }
-}
-
-/// 현재 장비·능력치·숙련도가 모두 반영된 전투 수치.
-List<(String, String)> combatSummary(Player player) {
-  final melee = player.stats;
-  final weapon = player.meleeWeapon;
-  final meleeSkill = weapon?.skill ?? Skill.unarmed;
-  final ranged = player.rangedStats;
-  final dmgBonus = ((player.meleeDamageMultiplier - 1) * 100).round();
-  return [
-    (
-      '근접 (${weapon?.name ?? '맨손'} · ${meleeSkill.label} ${player.skills.level(meleeSkill)})',
-      '명중 ${melee.accuracy} · 피해 1~${melee.maxDamage} (${_signedPercent(dmgBonus)})',
-    ),
-    ('근접 공격 시간', '${_turns(player.meleeDelay)}턴'),
-    if (player.reach > 1) ('근접 사거리', '${player.reach}칸'),
-    if (ranged != null) ...[
-      (
-        '원거리 (${player.launcher!.name} · 활 ${player.skills.level(Skill.bow)})',
-        '명중 ${ranged.accuracy} · 피해 1~${ranged.maxDamage} '
-            '(${_signedPercent(((player.rangedDamageMultiplier - 1) * 100).round())})',
-      ),
-      ('원거리 공격 시간', '${_turns(player.rangedDelay)}턴'),
-    ],
-    ('방어력', '${melee.armor}'),
-    ('회피', '${melee.evasion}'),
-    ('막기 확률', '${(player.blockChance * 100).round()}%'),
-    if (player.armourEvasionPenalty > 0)
-      ('갑옷·방패 무게로 회피', '-${player.armourEvasionPenalty}'),
-    (
-      '무기 최소 공격 시간',
-      weapon == null
-          ? '-'
-          : '${_turns(SkillEffects.minAttackDelay(weapon.delay))}턴',
-    ),
-  ];
-}
-
-String _signedPercent(int p) => '${p >= 0 ? '+' : ''}$p%';

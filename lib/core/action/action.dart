@@ -99,7 +99,11 @@ class AttackAction extends Action {
     final rng = game.rng;
     final a = attacker.stats;
     final d = target.stats;
-    final subject = attacker.isPlayer ? '' : '${iGa(attacker.name)} ';
+    // 몬스터는 든 무기를 밝힌다: "고블린이 몽둥이로 당신을 공격해 …"
+    final weapon = attacker is Monster ? attacker.meleeWeapon : null;
+    final subject = attacker.isPlayer
+        ? ''
+        : '${iGa(attacker.name)} ${weapon == null ? '' : '${euroRo(weapon.name)} '}';
     final object = eulReul(target.name);
 
     final hit = rng.nextInt(a.accuracy + d.evasion) < a.accuracy;
@@ -206,21 +210,34 @@ class RangedAttackAction extends Action {
 
 /// 발밑의 아이템을 모두 줍는다 (소지품 칸이 허락하는 만큼).
 class PickUpAction extends Action {
-  const PickUpAction();
+  /// [autoOnly]면 자동 줍기 대상([Game.shouldAutoPickUp])만,
+  /// [only]가 있으면 그 아이템 하나만 줍는다.
+  const PickUpAction({this.autoOnly = false, this.only});
+
+  final bool autoOnly;
+  final Item? only;
 
   @override
   ActionResult perform(Game game, Actor actor) {
     if (actor is! Player) return ActionResult.failure;
-    final items = game.itemsAt(actor.pos);
+    final items = game
+        .itemsAt(actor.pos)
+        .where((i) => only == null || i == only)
+        .where((i) => !autoOnly || game.shouldAutoPickUp(i))
+        .toList();
     if (items.isEmpty) {
       game.message('여기에는 주울 것이 없다.');
       return ActionResult.failure;
     }
     final picked = <String>[];
-    for (final item in [...items]) {
+    var full = false;
+    for (final item in items) {
       // 이름은 줍기 전에 정한다 (겹치면 아이템 묶음이 합쳐진다).
       final name = game.nameOf(item);
-      if (!actor.addItem(item)) break;
+      if (!actor.addItem(item)) {
+        full = true;
+        break;
+      }
       game.removeFloorItem(actor.pos, item);
       picked.add(name);
     }
@@ -229,9 +246,7 @@ class PickUpAction extends Action {
       return ActionResult.failure;
     }
     game.message('${eulReul(picked.join(', '))} 주웠다.');
-    if (game.itemsAt(actor.pos).isNotEmpty) {
-      game.message('소지품이 가득 차 나머지는 줍지 못했다.');
-    }
+    if (full) game.message('소지품이 가득 차 나머지는 줍지 못했다.');
     return const ActionResult.success(autPerTurn);
   }
 }

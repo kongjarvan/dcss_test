@@ -12,6 +12,7 @@ import 'package:dc_test/core/progression/skill_effects.dart';
 import 'package:dc_test/core/progression/skills.dart';
 import 'package:dc_test/core/world/dungeon_map.dart';
 import 'package:dc_test/core/world/tile.dart';
+import 'package:dc_test/ui/character_sheet.dart';
 import 'package:dc_test/ui/game_controller.dart';
 import 'package:dc_test/ui/game_screen.dart';
 import 'package:dc_test/ui/inventory_screen.dart';
@@ -422,7 +423,7 @@ void main() {
     });
   });
 
-  testWidgets('소지품 화면에서 장착하고, 장비 화면에서 확인한다', (tester) async {
+  testWidgets('소지품 화면에서 장착하고, 캐릭터 창의 전투 능력에서 확인한다', (tester) async {
     final controller = GameController(seed: 1, job: Job.fighter);
     final axe = Item(ItemTypes.handAxe);
     controller.game.player.inventory.add(axe);
@@ -435,9 +436,9 @@ void main() {
     await tester.tap(find.byTooltip('소지품'));
     await tester.pumpAndSettle();
     expect(find.byType(InventoryScreen), findsOneWidget);
-    expect(find.text('손도끼'), findsOneWidget);
+    expect(find.byTooltip('손도끼'), findsOneWidget);
 
-    await tester.tap(find.text('손도끼'));
+    await tester.tap(find.byTooltip('손도끼'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('장착'));
     await tester.pumpAndSettle();
@@ -448,10 +449,27 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('장비'));
+    // 아이템 탭에는 장비 버튼이 없다.
+    expect(find.byTooltip('장비'), findsNothing);
+
+    // 전투 능력 요약은 캐릭터 창에 있다.
+    await tester.tap(find.byTooltip('적성'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('캐릭터'));
     await tester.pumpAndSettle();
-    expect(find.byType(EquipmentScreen), findsOneWidget);
-    expect(find.text('손도끼'), findsOneWidget);
     expect(find.text('전투 능력'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('근접 (손도끼'),
+      100,
+      scrollable: find
+          .descendant(
+            of: find.byType(CharacterSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('근접 (손도끼 · 도끼 0)'), findsOneWidget);
+    expect(find.text('막기 확률'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5)); // 토스트 정리
   });
 }

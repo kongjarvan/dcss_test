@@ -63,7 +63,7 @@ void main() {
   });
 
   testWidgets('종족 선택 → 직업 선택 → 게임 시작, 새 게임은 종족 선택부터', (tester) async {
-    tester.view.physicalSize = const Size(1080, 2280);
+    tester.view.physicalSize = const Size(2280, 1080);
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
 

@@ -1,8 +1,13 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
+import '../core/entity/actor.dart';
 import '../core/entity/status.dart';
 import '../core/game.dart';
-import '../core/message_log.dart';
+import '../core/geometry.dart';
+import '../core/items/item.dart';
 import '../core/progression/job.dart';
 import '../core/progression/species.dart';
 import '../core/time/energy.dart';
@@ -12,9 +17,15 @@ import '../render/tile_renderer.dart';
 import 'action_bar.dart';
 import 'character_sheet.dart';
 import 'game_controller.dart';
+import 'inventory_screen.dart';
+import 'message_log_screen.dart';
+import 'side_panel.dart';
 import 'species_select_screen.dart';
 
 String _turns(int aut) => (aut / autPerTurn).toStringAsFixed(1);
+
+/// 오른쪽 패널(상태·메시지·버튼) 너비.
+const sidePanelWidth = 300.0;
 
 class GameScreen extends StatefulWidget {
   const GameScreen({
@@ -56,15 +67,69 @@ class _GameScreenState extends State<GameScreen> {
   late int _lastLevel;
   bool _sheetOpen = false;
 
+  // ── 토스트 (새 메시지를 맵 위쪽에 잠깐 표시) ──
+  static const _maxToasts = 3;
+  static const _toastTick = Duration(milliseconds: 500);
+
+  /// 토스트가 떠 있는 시간 (틱 수). 6틱 = 3초.
+  static const _toastLife = 6;
+
+  /// 이미 토스트로 보여준(또는 로그 화면에서 본) 메시지 수.
+  late int _seenMessages;
+  final List<_Toast> _toasts = [];
+  Timer? _toastTimer;
+
   @override
   void initState() {
     super.initState();
     _lastLevel = _controller.game.player.level;
+    _seenMessages = _controller.game.log.total;
     _controller.addListener(_onGameChanged);
   }
 
-  /// 레벨이 오르면 능력치 선택 창을 띄운다. 닫고 나중에 골라도 된다.
+  void _collectToasts() {
+    final log = _controller.game.log;
+    final fresh = log.total - _seenMessages;
+    _seenMessages = log.total;
+    if (fresh <= 0) return;
+    setState(() {
+      for (final m in log.recent(min(fresh, _maxToasts))) {
+        _toasts.add(_Toast(m.text, _toastLife));
+      }
+      while (_toasts.length > _maxToasts) {
+        _toasts.removeAt(0);
+      }
+    });
+    _toastTimer ??= Timer.periodic(_toastTick, (_) => _ageToasts());
+  }
+
+  void _ageToasts() {
+    if (!mounted) return;
+    setState(() {
+      for (final t in _toasts) {
+        t.life--;
+      }
+      _toasts.removeWhere((t) => t.life <= 0);
+    });
+    if (_toasts.isEmpty) {
+      _toastTimer?.cancel();
+      _toastTimer = null;
+    }
+  }
+
+  Future<void> _openLog() async {
+    await MessageLogScreen.open(context, _controller.game.log);
+    if (!mounted) return;
+    // 로그에서 다 봤으므로 떠 있는 토스트는 지운다.
+    setState(() {
+      _seenMessages = _controller.game.log.total;
+      _toasts.clear();
+    });
+  }
+
+  /// 새 메시지를 토스트로 띄우고, 레벨이 오르면 능력치 선택 창을 띄운다.
   void _onGameChanged() {
+    _collectToasts();
     final player = _controller.game.player;
     final leveledUp = player.level > _lastLevel;
     _lastLevel = player.level;
@@ -81,6 +146,7 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    _toastTimer?.cancel();
     _controller.removeListener(_onGameChanged);
     _controller.dispose();
     super.dispose();
@@ -97,12 +163,48 @@ class _GameScreenState extends State<GameScreen> {
             final game = _controller.game;
             return Stack(
               children: [
-                Column(
+                // 가로 화면: 왼쪽은 맵, 오른쪽 패널에 상태·메시지·버튼.
+                Row(
                   children: [
-                    _StatusBar(game: game, onNewGame: _confirmNewGame),
-                    Expanded(child: _buildMap(game)),
-                    _MessagePanel(log: game.log, now: game.time),
-                    ActionBar(controller: _controller),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          _buildMap(game),
+                          // 새 메시지 토스트: 맵 위쪽 가운데.
+                          if (_toasts.isNotEmpty)
+                            Positioned(
+                              left: 24,
+                              right: 24,
+                              top: 6,
+                              child: IgnorePointer(
+                                child: _ToastList(toasts: _toasts),
+                              ),
+                            ),
+                          // 상태 효과: 맵 왼쪽 아래.
+                          if (game.player.statuses.isNotEmpty)
+                            Positioned(
+                              left: 8,
+                              bottom: 8,
+                              right: 8,
+                              child: _StatusChips(player: game.player),
+                            ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      width: sidePanelWidth,
+                      child: Column(
+                        children: [
+                          _StatusBar(
+                            controller: _controller,
+                            onNewGame: _confirmNewGame,
+                            onOpenLog: _openLog,
+                          ),
+                          Expanded(child: SidePanel(controller: _controller)),
+                          ActionBar(controller: _controller),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
                 if (game.isGameOver)
@@ -139,6 +241,45 @@ class _GameScreenState extends State<GameScreen> {
     if (confirmed == true && mounted) SpeciesSelectScreen.open(context);
   }
 
+  /// [tile]에 있는 아이템을 누른 위치([anchor]) 근처에 작은 팝업으로 보여준다.
+  /// 본 적 없는 칸은 아무것도 하지 않는다.
+  void _showTileItems(Offset anchor, Pos tile) {
+    final game = _controller.game;
+    if (!game.map.isExplored(tile)) return;
+    final items = game.itemsAt(tile);
+    // 몬스터는 지금 보이는 칸에 있을 때만.
+    final actor = game.map.isVisible(tile) ? game.actorAt(tile) : null;
+    final monster = actor is Monster ? actor : null;
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '닫기',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 120),
+      pageBuilder: (dialogContext, _, _) {
+        final screen = MediaQuery.sizeOf(dialogContext);
+        const width = 220.0;
+        // 화면 밖으로 나가지 않게 누른 위치 오른쪽 아래에 둔다.
+        final left = (anchor.dx + 12).clamp(8.0, screen.width - width - 8);
+        final top = (anchor.dy - 12).clamp(8.0, screen.height * 0.5);
+        return Stack(
+          children: [
+            Positioned(
+              left: left,
+              top: top,
+              width: width,
+              child: _TileItemsPopup(
+                game: game,
+                items: items,
+                monster: monster,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildMap(Game game) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -166,6 +307,16 @@ class _GameScreenState extends State<GameScreen> {
               tileSize,
             ),
           ),
+          // 길게 누르면 그 칸의 아이템을 팝업으로 보여준다.
+          onLongPressStart: (details) => _showTileItems(
+            details.globalPosition,
+            MapPainter.tileAt(
+              details.localPosition,
+              size,
+              game.player.pos,
+              tileSize,
+            ),
+          ),
           child: CustomPaint(
             size: size,
             painter: MapPainter(
@@ -182,10 +333,16 @@ class _GameScreenState extends State<GameScreen> {
 }
 
 class _StatusBar extends StatelessWidget {
-  const _StatusBar({required this.game, required this.onNewGame});
+  const _StatusBar({
+    required this.controller,
+    required this.onNewGame,
+    required this.onOpenLog,
+  });
 
-  final Game game;
+  final GameController controller;
+  Game get game => controller.game;
   final VoidCallback onNewGame;
+  final VoidCallback onOpenLog;
 
   @override
   Widget build(BuildContext context) {
@@ -196,12 +353,12 @@ class _StatusBar extends StatelessWidget {
         : ratio > 0.25
         ? const Color(0xFFFFB300)
         : const Color(0xFFE53935);
-    const labelStyle = TextStyle(color: Color(0xFFBDB6A8), fontSize: 13);
 
     return Container(
       color: const Color(0xFF15120F),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -227,6 +384,13 @@ class _StatusBar extends StatelessWidget {
                 ),
               ),
               IconButton(
+                onPressed: onOpenLog,
+                icon: const Icon(Icons.receipt_long, size: 20),
+                tooltip: '메시지 로그',
+                color: const Color(0xFFBDB6A8),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
                 onPressed: onNewGame,
                 icon: const Icon(Icons.refresh, size: 20),
                 tooltip: '새 게임',
@@ -244,36 +408,21 @@ class _StatusBar extends StatelessWidget {
             height: 8,
           ),
           const SizedBox(height: 4),
-          _BarRow(
-            label: 'Lv ${player.level}',
-            labelColor: const Color(0xFFD8B04A),
-            value: xpProgress(player),
-            color: const Color(0xFFD8B04A),
-            background: const Color(0xFF2E2614),
-            height: 5,
-          ),
-          const SizedBox(height: 6),
+          // 레벨·층, 그 오른쪽에 발밑 아이템 (누르면 상세 정보).
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('1층', style: labelStyle),
-              Text('시간 ${_turns(game.time)}', style: labelStyle),
-              Text('직전 행동 ${_turns(game.lastActionCost)}턴', style: labelStyle),
-              Text('처치 ${game.kills}', style: labelStyle),
+              Text(
+                'Lv ${player.level} · 1층',
+                style: const TextStyle(
+                  color: Color(0xFFD8B04A),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: FloorItemStrip(controller: controller)),
             ],
           ),
-          if (player.statuses.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                for (final MapEntry(key: status, value: aut)
-                    in player.statuses.entries)
-                  _StatusChip(status: status, aut: aut),
-              ],
-            ),
-          ],
         ],
       ),
     );
@@ -324,7 +473,8 @@ class _BarRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 40),
+        // 첫 줄의 아이콘 버튼 두 개(로그·새 게임) 폭만큼 비워 막대 끝을 맞춘다.
+        const SizedBox(width: 80),
       ],
     );
   }
@@ -338,6 +488,190 @@ IconData statusIcon(Status status) => switch (status) {
   Status.brilliance => Icons.psychology,
   Status.poison => Icons.sick,
 };
+
+/// 몬스터 체력 상태 (DCSS식 표현).
+String monsterHealthText(Monster m) {
+  final ratio = m.hp / m.maxHp;
+  if (ratio >= 1) return '다치지 않음';
+  if (ratio > 0.75) return '조금 다침';
+  if (ratio > 0.5) return '다침';
+  if (ratio > 0.25) return '심하게 다침';
+  return '거의 죽어감';
+}
+
+/// 몬스터가 지금 무엇을 하는지.
+String monsterActivityText(Monster m) => !m.awake
+    ? '자는 중'
+    : m.lastKnownPlayerPos != null
+    ? '당신을 쫓는 중'
+    : '배회 중';
+
+/// 맵 칸 길게 누르기 팝업: 그 칸의 몬스터 정보와 아이템 목록 (아이콘 + 이름).
+class _TileItemsPopup extends StatelessWidget {
+  const _TileItemsPopup({
+    required this.game,
+    required this.items,
+    this.monster,
+  });
+
+  final Game game;
+  final List<Item> items;
+  final Monster? monster;
+
+  @override
+  Widget build(BuildContext context) {
+    final monster = this.monster;
+    const dim = TextStyle(color: Color(0xFF8A8478), fontSize: 12);
+    return Material(
+      color: const Color(0xF21A1714),
+      elevation: 6,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (monster != null) ...[
+              Text(
+                monster.name,
+                style: const TextStyle(
+                  color: Color(0xFFE57373),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '${monsterHealthText(monster)} · ${monsterActivityText(monster)}',
+                style: const TextStyle(color: Color(0xFFF2EDE4), fontSize: 12),
+              ),
+              Text(
+                [
+                  monster.weaponType?.name ?? '맨손',
+                  ?monster.armourType?.name,
+                  ?monster.shieldType?.name,
+                ].join(' · '),
+                style: dim,
+              ),
+              if (items.isNotEmpty) const Divider(height: 12),
+            ],
+            if (monster == null && items.isEmpty)
+              const Text(
+                '아무것도 없다.',
+                style: TextStyle(color: Color(0xFF8A8478), fontSize: 13),
+              ),
+            if (items.isNotEmpty)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final item in items.take(8))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          ItemIcon.of(game, item, size: 26),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              game.nameOf(item),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFF2EDE4),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (items.length > 8)
+                    Text(
+                      '외 ${items.length - 8}개',
+                      style: const TextStyle(
+                        color: Color(0xFF8A8478),
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Toast {
+  _Toast(this.text, this.life);
+
+  final String text;
+
+  /// 남은 틱 수. 0이 되면 사라진다.
+  int life;
+}
+
+/// 맵 위쪽에 작게 띄우는 메시지들. 사라지기 직전에는 흐려진다.
+class _ToastList extends StatelessWidget {
+  const _ToastList({required this.toasts});
+
+  final List<_Toast> toasts;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final t in toasts)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: AnimatedOpacity(
+              opacity: t.life <= 1 ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 400),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC15120F),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  t.text,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFF2EDE4),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _StatusChips extends StatelessWidget {
+  const _StatusChips({required this.player});
+
+  final Player player;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        for (final MapEntry(key: status, value: aut) in player.statuses.entries)
+          _StatusChip(status: status, aut: aut),
+      ],
+    );
+  }
+}
 
 /// 상태 효과 표시: 아이콘 + 이름 + 남은 턴. 해로운 효과는 빨간색.
 class _StatusChip extends StatelessWidget {
@@ -354,6 +688,7 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
+        color: const Color(0xCC15120F),
         border: Border.all(color: color.withValues(alpha: 0.6)),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -366,46 +701,6 @@ class _StatusChip extends StatelessWidget {
             '${status.label} ${(aut / autPerTurn).ceil()}',
             style: TextStyle(color: color, fontSize: 12),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessagePanel extends StatelessWidget {
-  const _MessagePanel({required this.log, required this.now});
-
-  static const _lines = 5;
-
-  final MessageLog log;
-  final int now;
-
-  @override
-  Widget build(BuildContext context) {
-    final messages = log.recent(_lines);
-    return Container(
-      height: _lines * 18.0 + 12,
-      width: double.infinity,
-      color: const Color(0xFF0E0C0A),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final m in messages)
-            Text(
-              m.text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.38,
-                // 이번 턴에 발생한 메시지는 밝게.
-                color: m.time == now
-                    ? const Color(0xFFF2EDE4)
-                    : const Color(0xFF8A8478),
-              ),
-            ),
         ],
       ),
     );

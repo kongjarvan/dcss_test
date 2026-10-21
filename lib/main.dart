@@ -8,7 +8,11 @@ import 'ui/species_select_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // 가로 모드 전용 (좌우 어느 쪽으로 눕혀도 됨).
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   runApp(const DungeonApp());
 }
 

@@ -279,7 +279,7 @@ void main() {
     await tester.tap(find.byTooltip('물약 마시기'));
     await tester.pumpAndSettle();
     final look = game.potionAppearance[Potion.haste]!.name;
-    await tester.tap(find.text('$look 물약'));
+    await tester.tap(find.text('$look 물약').last); // 위에 뜬 선택 창
     await tester.pumpAndSettle();
 
     expect(game.player.has(Status.haste), isTrue);

@@ -1,6 +1,10 @@
 import 'package:dc_test/core/progression/species.dart';
 import 'package:dc_test/main.dart';
+import 'package:dc_test/ui/game_controller.dart';
+import 'package:dc_test/ui/game_screen.dart';
+import 'package:dc_test/core/game.dart';
 import 'package:dc_test/render/map_painter.dart';
+import 'package:dc_test/ui/message_log_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,15 +16,34 @@ FilledButton buttonByTooltip(WidgetTester tester, String tooltip) =>
       ),
     );
 
+/// 화면 안 ListenableBuilder가 듣고 있는 컨트롤러에서 게임을 꺼낸다.
+Game gameOf(WidgetTester tester) => tester
+    .widgetList<ListenableBuilder>(find.byType(ListenableBuilder))
+    .map((b) => b.listenable)
+    .whereType<GameController>()
+    .first
+    .game;
+
 void main() {
   testWidgets('게임 화면이 뜨고 대기 버튼으로 시간이 흐른다', (tester) async {
-    await tester.pumpWidget(const DungeonApp(seed: 42, species: Species.human));
+    final controller = GameController(seed: 42);
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
     expect(find.textContaining('HP 30/30'), findsOneWidget);
-    expect(find.text('시간 0.0'), findsOneWidget);
+    expect(controller.game.time, 0);
 
     await tester.tap(find.byTooltip('1턴 대기'));
     await tester.pump();
-    expect(find.text('시간 1.0'), findsOneWidget);
+    expect(controller.game.time, 10);
+  });
+
+  testWidgets('상태바에는 레벨과 층만 한 줄로 (시간·처치 수 없음)', (tester) async {
+    await tester.pumpWidget(const DungeonApp(seed: 42, species: Species.human));
+    expect(find.text('Lv 1 · 1층'), findsOneWidget);
+    expect(find.textContaining('시간 '), findsNothing);
+    expect(find.textContaining('처치 '), findsNothing);
+    expect(find.textContaining('직전 행동'), findsNothing);
   });
 
   testWidgets('카테고리 탭을 바꾸면 해당 행동 버튼이 보인다', (tester) async {
@@ -82,9 +105,13 @@ void main() {
     expect(zoomed, greaterThan(before * 1.5));
 
     // 플레이어 오른쪽 칸 탭 → 이동(또는 문 열기)으로 시간이 흐른다.
+    final hpLabel = find.textContaining('HP ');
+    expect(hpLabel, findsOneWidget);
+    final state = tester.state(find.byType(GameScreen));
     await tester.tapAt(center + Offset(zoomed, 0));
     await tester.pump();
-    expect(find.text('시간 0.0'), findsNothing);
+    expect(tester.state(find.byType(GameScreen)), same(state));
+    expect(gameOf(tester).time, greaterThan(0));
   });
 
   testWidgets('HP·MP가 가득하면 휴식 버튼 비활성', (tester) async {
@@ -93,5 +120,21 @@ void main() {
       buttonByTooltip(tester, '휴식 (HP·MP 완전 회복) · 회복 완료').onPressed,
       isNull,
     );
+  });
+
+  testWidgets('메시지는 게임 화면에 바로 보이지 않고 로그 버튼으로 연다', (tester) async {
+    await tester.pumpWidget(const DungeonApp(seed: 42, species: Species.human));
+    const intro = '던전 1층에 들어섰다. 화면을 탭해 이동하세요.';
+    expect(find.text(intro), findsNothing);
+
+    await tester.tap(find.byTooltip('메시지 로그'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MessageLogScreen), findsOneWidget);
+    expect(find.text(intro), findsOneWidget);
+    expect(find.text('0.0'), findsWidgets); // 메시지가 나온 시간
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(MessageLogScreen), findsNothing);
   });
 }

@@ -91,7 +91,7 @@ class Player extends Actor {
   }
 
   // ── 소지품 / 장비 ──
-  static const inventoryCapacity = 20;
+  static const inventoryCapacity = 30;
 
   final List<Item> inventory = [];
   final Map<EquipSlot, Item> _equipped = {};
@@ -393,6 +393,45 @@ class Monster extends Actor {
   final MonsterType type;
 
   int get speed => type.speed;
+
+  // ── 장비 ──
+  final Map<EquipSlot, Item> equipment = {};
+
+  WeaponType? get weaponType =>
+      equipment[EquipSlot.weapon]?.type as WeaponType?;
+  ArmourType? get armourType =>
+      equipment[EquipSlot.armour]?.type as ArmourType?;
+  ShieldType? get shieldType =>
+      equipment[EquipSlot.shield]?.type as ShieldType?;
+
+  /// 근접 공격에 쓰는 무기. 활은 근접에 못 쓰므로 맨손(null).
+  WeaponType? get meleeWeapon => weaponType?.ranged == true ? null : weaponType;
+
+  void equip(Item item) => equipment[(item.type as EquipmentType).slot] = item;
+
+  /// [MonsterType.gear] 확률에 따라 장비를 고른다.
+  void equipRandomGear(math.Random rng) {
+    for (final g in type.gear) {
+      if (equipment.containsKey(g.type.slot)) continue;
+      if (rng.nextDouble() < g.chance) equip(Item(g.type));
+    }
+  }
+
+  /// 무기가 있으면 무기의 피해·명중, 없으면 맨손(종류 기본 수치). 갑옷은 방어력에 더한다.
+  /// 공격 속도는 무기와 관계없이 몬스터 고유 속도를 쓴다 (DCSS와 같음).
+  @override
+  CombatStats get stats {
+    final weapon = meleeWeapon;
+    return CombatStats(
+      accuracy: baseStats.accuracy + (weapon?.accuracy ?? 0),
+      maxDamage: weapon?.damage ?? baseStats.maxDamage,
+      evasion: baseStats.evasion,
+      armor: baseStats.armor + (armourType?.ac ?? 0),
+    );
+  }
+
+  @override
+  double get blockChance => SkillEffects.blockChance(shieldType?.block ?? 0, 0);
 
   /// 행동력. [EnergyScheduler] 참고.
   int energy = 0;

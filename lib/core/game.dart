@@ -80,7 +80,8 @@ class Game {
         // 초기 에너지를 흩뿌려 몬스터들이 같은 박자로 움직이지 않게 한다.
         monsters.add(
           Monster(MonsterTypes.goblin, pos: p)
-            ..energy = -rng.nextInt(autPerTurn * normalSpeed),
+            ..energy = -rng.nextInt(autPerTurn * normalSpeed)
+            ..equipRandomGear(rng),
         );
       }
     }
@@ -209,6 +210,13 @@ class Game {
       _noticedPiles.remove(p);
     }
   }
+
+  /// 자동 탐험 중 저절로 주울 아이템: 소모품(물약) 중 해롭다고 밝혀진 것이 아닌 것.
+  bool shouldAutoPickUp(Item item) => switch (item.type) {
+    PotionType(:final potion) =>
+      !(identifiedPotions.contains(potion) && potion.harmful),
+    _ => false,
+  };
 
   /// 아직 확인하지 않은, 본 적 있는 아이템 더미.
   bool hasUnnoticedItems(Pos p) =>
@@ -396,6 +404,13 @@ class Game {
       message('당신은 죽었다...');
     } else {
       message('${eulReul(victim.name)} 죽였다!');
+      // 몬스터는 장비를 그 자리에 떨어뜨린다.
+      if (victim is Monster) {
+        for (final item in victim.equipment.values) {
+          addFloorItem(victim.pos, item);
+        }
+        victim.equipment.clear();
+      }
       if (killer.isPlayer && victim is Monster) {
         kills++;
         grantXp(victim.type.xp);

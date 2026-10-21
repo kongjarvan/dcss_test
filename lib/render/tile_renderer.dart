@@ -19,7 +19,14 @@ abstract class TileRenderer {
     WeaponType? weapon,
     ShieldType? shield,
   });
-  void drawMonster(Canvas canvas, Rect rect, MonsterType type);
+
+  /// [weapon]: 몬스터가 든 무기 (없으면 맨손).
+  void drawMonster(
+    Canvas canvas,
+    Rect rect,
+    MonsterType type, {
+    WeaponType? weapon,
+  });
 
   /// [tint]: 물약 색 (0xAARRGGBB). 물약 외에는 무시.
   void drawItem(Canvas canvas, Rect rect, ItemType type, {int? tint});
@@ -245,28 +252,32 @@ class ProceduralTileRenderer implements TileRenderer {
   }
 
   @override
-  void drawMonster(Canvas c, Rect r, MonsterType type) {
+  void drawMonster(Canvas c, Rect r, MonsterType type, {WeaponType? weapon}) {
     switch (type.id) {
       case 'goblin':
-        _goblin(c, r);
+        _goblin(c, r, weapon);
       default:
         _shadow(c, r);
         c.drawCircle(r.center, r.width * 0.3, _fill(const Color(0xFFB04040)));
     }
   }
 
-  void _goblin(Canvas c, Rect r) {
+  void _goblin(Canvas c, Rect r, WeaponType? weapon) {
     final w = r.width;
     final h = r.height;
     final cx = r.center.dx;
     const skin = Color(0xFF6FA03C);
     _shadow(c, r);
-    // 몽둥이
-    c.drawLine(
-      Offset(cx - w * 0.3, r.top + h * 0.75),
-      Offset(cx - w * 0.36, r.top + h * 0.38),
-      _stroke(const Color(0xFF6B4423), w * 0.08),
-    );
+    // 든 무기 (맨손이면 없음)
+    if (weapon != null) {
+      _weapon(
+        c,
+        Offset(cx - w * 0.28, r.top + h * 0.76),
+        Offset(cx - w * 0.38, r.top + h * 0.3),
+        w,
+        weapon.skill,
+      );
+    }
     // 몸통 (누더기 옷)
     final body = Path()
       ..moveTo(cx - w * 0.2, r.top + h * 0.86)

@@ -38,21 +38,23 @@ class JobSelectScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            for (final job in Job.values) ...[
-              _JobCard(
-                species: species,
-                job: job,
-                // 게임 시작. 선택 화면들은 모두 닫는다.
-                onSelect: () => Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        GameScreen(seed: seed, species: species, job: job),
+            SideBySideCards(
+              children: [
+                for (final job in Job.values)
+                  _JobCard(
+                    species: species,
+                    job: job,
+                    // 게임 시작. 선택 화면들은 모두 닫는다.
+                    onSelect: () => Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            GameScreen(seed: seed, species: species, job: job),
+                      ),
+                      (_) => false,
+                    ),
                   ),
-                  (_) => false,
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
+              ],
+            ),
           ],
         ),
       ),

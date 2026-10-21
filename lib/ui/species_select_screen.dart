@@ -9,31 +9,15 @@ import 'job_select_screen.dart';
 
 /// 적성 +2 이상은 "뛰어난 적성", -2 이하는 "약한 적성"으로 요약.
 List<Widget> _aptitudeLines(Species species) {
-  String list(bool Function(int) test) => Skill.values
-      .where((s) => test(species.aptitude(s)))
-      .map((s) => s.label)
-      .join(', ');
+  String list(bool Function(int) test) => Skill.values.where((s) => test(species.aptitude(s))).map((s) => s.label).join(', ');
   final strong = list((a) => a >= 2);
   final weak = list((a) => a <= -2);
   if (strong.isEmpty && weak.isEmpty) {
-    return const [
-      Text(
-        '적성  모든 숙련도가 고르다',
-        style: TextStyle(color: Color(0xFFD8CFBF), fontSize: 13),
-      ),
-    ];
+    return const [Text('적성  모든 숙련도가 고르다', style: TextStyle(color: Color(0xFFD8CFBF), fontSize: 13))];
   }
   return [
-    if (strong.isNotEmpty)
-      Text(
-        '뛰어난 적성  $strong',
-        style: const TextStyle(color: Color(0xFF7BC67B), fontSize: 13),
-      ),
-    if (weak.isNotEmpty)
-      Text(
-        '약한 적성  $weak',
-        style: const TextStyle(color: Color(0xFFE57373), fontSize: 13),
-      ),
+    if (strong.isNotEmpty) Text('+ : $strong', style: const TextStyle(color: Color(0xFF7BC67B), fontSize: 13)),
+    if (weak.isNotEmpty) Text('- : $weak', style: const TextStyle(color: Color(0xFFE57373), fontSize: 13)),
   ];
 }
 
@@ -52,10 +36,7 @@ class SpeciesSelectScreen extends StatelessWidget {
 
   /// 모든 화면을 닫고 종족 선택부터 다시 시작한다 (새 게임/다시 시작).
   static void open(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SpeciesSelectScreen()),
-      (_) => false,
-    );
+    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const SpeciesSelectScreen()), (_) => false);
   }
 
   @override
@@ -64,31 +45,28 @@ class SpeciesSelectScreen extends StatelessWidget {
       backgroundColor: const Color(0xFF0E0C0A),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
           children: [
             const Text(
               '종족 선택',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 24),
-            for (final species in Species.values) ...[
-              _SpeciesCard(
-                species: species,
-                // 직업 선택으로. 뒤로 가기로 종족을 다시 고를 수 있다.
-                onSelect: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        JobSelectScreen(species: species, seed: seed),
+            const SizedBox(height: 16),
+            SideBySideCards(
+              children: [
+                for (final species in Species.values)
+                  _SpeciesCard(
+                    species: species,
+                    // 직업 선택으로. 뒤로 가기로 종족을 다시 고를 수 있다.
+                    onSelect: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => JobSelectScreen(species: species, seed: seed),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
+              ],
+            ),
           ],
         ),
       ),
@@ -116,27 +94,16 @@ class _SpeciesCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(
-                    speciesIcon(species),
-                    size: 28,
-                    color: const Color(0xFFD8B04A),
-                  ),
+                  Icon(speciesIcon(species), size: 28, color: const Color(0xFFD8B04A)),
                   const SizedBox(width: 12),
                   Text(
                     species.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                species.description,
-                style: const TextStyle(color: Color(0xFFBDB6A8), fontSize: 14),
-              ),
+              Text(species.description, style: const TextStyle(color: Color(0xFFBDB6A8), fontSize: 14)),
               const SizedBox(height: 12),
               AttributeGrid(valueOf: species.baseValue),
               const SizedBox(height: 10),
@@ -152,12 +119,7 @@ class _SpeciesCard extends StatelessWidget {
 /// 능력치 값 표시. 기준값(10)보다 높으면 초록, 낮으면 빨강.
 /// [bonus]가 있으면 값 옆에 (+3)처럼 보정치를 함께 표시한다.
 class AttributeValueChip extends StatelessWidget {
-  const AttributeValueChip({
-    super.key,
-    required this.attribute,
-    required this.value,
-    this.bonus = 0,
-  });
+  const AttributeValueChip({super.key, required this.attribute, required this.value, this.bonus = 0});
 
   final Attribute attribute;
   final int value;
@@ -178,29 +140,33 @@ class AttributeValueChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            attributeIcon(attribute),
-            size: 16,
-            color: const Color(0xFF8A8478),
-          ),
+          Icon(attributeIcon(attribute), size: 16, color: const Color(0xFF8A8478)),
           const SizedBox(width: 4),
-          Text(
-            '${attribute.label} ',
-            style: const TextStyle(color: Color(0xFF8A8478), fontSize: 13),
-          ),
+          Text('${attribute.label} ', style: const TextStyle(color: Color(0xFF8A8478), fontSize: 13)),
           Text(
             '$value',
-            style: TextStyle(
-              color: color,
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold),
           ),
-          if (bonus != 0)
-            Text(
-              ' (${bonus > 0 ? '+' : ''}$bonus)',
-              style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 11),
-            ),
+          if (bonus != 0) Text(' (${bonus > 0 ? '+' : ''}$bonus)', style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 가로 화면용: 카드들을 옆으로 나란히, 높이를 맞춰 배치한다.
+class SideBySideCards extends StatelessWidget {
+  const SideBySideCards({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, card) in children.indexed) ...[if (i > 0) const SizedBox(width: 12), Expanded(child: card)],
         ],
       ),
     );
@@ -228,11 +194,7 @@ class AttributeGrid extends StatelessWidget {
               children: [
                 for (final a in values.skip(i).take(2))
                   Expanded(
-                    child: AttributeValueChip(
-                      attribute: a,
-                      value: valueOf(a),
-                      bonus: bonusOf?.call(a) ?? 0,
-                    ),
+                    child: AttributeValueChip(attribute: a, value: valueOf(a), bonus: bonusOf?.call(a) ?? 0),
                   ),
               ],
             ),

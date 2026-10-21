@@ -4,6 +4,9 @@ import '../core/entity/actor.dart';
 import '../core/progression/attribute_effects.dart';
 import '../core/progression/attributes.dart';
 import '../core/progression/experience.dart';
+import '../core/progression/skill_effects.dart';
+import '../core/progression/skills.dart';
+import '../core/time/energy.dart';
 import 'game_controller.dart';
 
 /// 현재 레벨 안에서의 경험치 진행률 (0~1).
@@ -139,6 +142,24 @@ class CharacterSheet extends StatelessWidget {
                 value: player.attributes[attribute],
                 onIncrease: points > 0 ? () => controller.increaseAttribute(attribute) : null,
               ),
+            const SizedBox(height: 20),
+            const Text(
+              '전투 능력',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            for (final (label, value) in combatSummary(player))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: Text(label, style: dim)),
+                    const SizedBox(width: 12),
+                    Text(value, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -272,4 +293,39 @@ class _PietyRow extends StatelessWidget {
       ],
     );
   }
+}
+
+String _turnsText(int aut) => (aut / autPerTurn).toStringAsFixed(1);
+
+String _signedPercent(double multiplier) {
+  final p = ((multiplier - 1) * 100).round();
+  return '${p >= 0 ? '+' : ''}$p%';
+}
+
+/// 현재 장비·능력치·숙련도가 모두 반영된 전투 수치 (라벨, 값).
+List<(String, String)> combatSummary(Player player) {
+  final melee = player.stats;
+  final weapon = player.meleeWeapon;
+  final meleeSkill = weapon?.skill ?? Skill.unarmed;
+  final ranged = player.rangedStats;
+  return [
+    (
+      '근접 (${weapon?.name ?? '맨손'} · ${meleeSkill.label} ${player.skills.level(meleeSkill)})',
+      '명중 ${melee.accuracy} · 피해 1~${melee.maxDamage} (${_signedPercent(player.meleeDamageMultiplier)})',
+    ),
+    ('근접 공격 시간', '${_turnsText(player.meleeDelay)}턴'),
+    if (player.reach > 1) ('근접 사거리', '${player.reach}칸'),
+    if (ranged != null) ...[
+      (
+        '원거리 (${player.launcher!.name} · 활 ${player.skills.level(Skill.bow)})',
+        '명중 ${ranged.accuracy} · 피해 1~${ranged.maxDamage} (${_signedPercent(player.rangedDamageMultiplier)})',
+      ),
+      ('원거리 공격 시간', '${_turnsText(player.rangedDelay)}턴'),
+    ],
+    ('방어력', '${melee.armor}'),
+    ('회피', '${melee.evasion}'),
+    ('막기 확률', '${(player.blockChance * 100).round()}%'),
+    if (player.armourEvasionPenalty > 0) ('갑옷·방패 무게로 회피', '-${player.armourEvasionPenalty}'),
+    ('무기 최소 공격 시간', weapon == null ? '-' : '${_turnsText(SkillEffects.minAttackDelay(weapon.delay))}턴'),
+  ];
 }

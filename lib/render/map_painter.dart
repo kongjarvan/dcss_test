@@ -98,7 +98,7 @@ class MapPainter extends CustomPainter {
     for (final m in game.visibleMonsters) {
       final rect = rectOf(m.pos);
       if (!screen.contains(rect.center)) offscreen.add(rect.center);
-      renderer.drawMonster(canvas, rect, m.type);
+      renderer.drawMonster(canvas, rect, m.type, weapon: m.weaponType);
       if (m.hp < m.maxHp) _drawHpBar(canvas, rect, m.hp / m.maxHp);
     }
 

@@ -21,3 +21,12 @@ String numberIGa(int n) {
   const batchimDigits = {0, 1, 3, 6, 7, 8};
   return '$n${batchimDigits.contains(n.abs() % 10) ? '이' : '가'}';
 }
+
+/// 으로/로. 받침이 없거나 ㄹ 받침이면 "로".
+String euroRo(String word) {
+  if (word.isEmpty) return word;
+  final code = word.codeUnitAt(word.length - 1);
+  if (code < 0xAC00 || code > 0xD7A3) return '$word로';
+  final jong = (code - 0xAC00) % 28;
+  return '$word${jong == 0 || jong == 8 ? '로' : '으로'}';
+}
