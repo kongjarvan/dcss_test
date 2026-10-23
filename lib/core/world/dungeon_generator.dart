@@ -5,12 +5,23 @@ import 'dungeon_map.dart';
 import 'tile.dart';
 
 class GeneratedLevel {
-  GeneratedLevel(this.map, this.rooms);
+  GeneratedLevel(
+    this.map,
+    this.rooms, {
+    required this.stairsDown,
+    required this.stairsUp,
+  });
 
   final DungeonMap map;
 
   /// 생성 순서대로. 첫 번째 방이 시작 방.
   final List<GridRect> rooms;
+
+  /// 내려가는 계단들 (시작 방에서 먼 방부터). 순서가 곧 계단 번호.
+  final List<Pos> stairsDown;
+
+  /// 올라가는 계단들 (시작 방부터 가까운 방 순서). 순서가 곧 계단 번호.
+  final List<Pos> stairsUp;
 }
 
 /// 방 + L자 복도 방식의 던전 생성기.
@@ -26,6 +37,8 @@ class DungeonGenerator {
     int minRoomSize = 4,
     int maxRoomSize = 9,
     double doorChance = 0.75,
+    int stairsUp = 0,
+    int stairsDown = 3,
   }) {
     final map = DungeonMap(width, height);
     final rooms = <GridRect>[];
@@ -47,7 +60,54 @@ class DungeonGenerator {
     }
 
     _placeDoors(map, rooms, doorChance);
-    return GeneratedLevel(map, rooms);
+    final (up, down) = _placeStairs(map, rooms, stairsUp, stairsDown);
+    return GeneratedLevel(map, rooms, stairsDown: down, stairsUp: up);
+  }
+
+  /// 올라가는 계단은 시작 방부터 가까운 방들에, 내려가는 계단은 먼 방들에 하나씩.
+  /// 방이 모자라면 남은 계단은 방 안 무작위 바닥에 놓는다.
+  (List<Pos>, List<Pos>) _placeStairs(
+    DungeonMap map,
+    List<GridRect> rooms,
+    int upCount,
+    int downCount,
+  ) {
+    final start = rooms.first.center;
+    final byDistance = [...rooms]
+      ..sort(
+        (a, b) =>
+            a.center.distanceTo(start).compareTo(b.center.distanceTo(start)),
+      );
+    final used = <GridRect>{};
+    final taken = <Pos>{};
+
+    Pos place(GridRect? room, TileType type) {
+      var pos = room?.center;
+      // 방이 모자라면 무작위 방의 빈 바닥 (시작 칸과 다른 계단은 피함).
+      while (pos == null || taken.contains(pos) || map[pos] != TileType.floor) {
+        final r = rooms[rng.nextInt(rooms.length)];
+        pos = Pos(r.left + rng.nextInt(r.width), r.top + rng.nextInt(r.height));
+        if (upCount == 0 && pos == start) pos = null;
+      }
+      if (room != null) used.add(room);
+      taken.add(pos);
+      map[pos] = type;
+      return pos;
+    }
+
+    if (upCount == 0) taken.add(start); // 1층: 시작 칸은 플레이어 자리
+    final up = [
+      for (var i = 0; i < upCount; i++)
+        place(i < byDistance.length ? byDistance[i] : null, TileType.stairsUp),
+    ];
+    final farFirst = byDistance.reversed
+        .where((r) => !used.contains(r) && (upCount > 0 || r != rooms.first))
+        .toList();
+    final down = [
+      for (var i = 0; i < downCount; i++)
+        place(i < farFirst.length ? farFirst[i] : null, TileType.stairsDown),
+    ];
+    return (up, down);
   }
 
   void _carveCorridor(DungeonMap map, Pos a, Pos b) {

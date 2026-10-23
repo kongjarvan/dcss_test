@@ -407,3 +407,22 @@ class QuaffAction extends Action {
     }
   }
 }
+
+/// 발밑 계단으로 다른 층에 간다 (1턴). 내려가는 계단·올라가는 계단 모두.
+class UseStairsAction extends Action {
+  const UseStairsAction();
+
+  @override
+  ActionResult perform(Game game, Actor actor) {
+    if (actor is! Player) return ActionResult.failure;
+    if (!game.map[actor.pos].isStairs) {
+      game.message('여기에는 계단이 없다.');
+      return ActionResult.failure;
+    }
+    if (!game.useStairs()) {
+      game.message('계단이 어디로도 이어져 있지 않다.');
+      return ActionResult.failure;
+    }
+    return const ActionResult.success(autPerTurn);
+  }
+}

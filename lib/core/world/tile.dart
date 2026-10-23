@@ -2,7 +2,13 @@ enum TileType {
   wall(passable: false, blocksSight: true),
   floor(passable: true, blocksSight: false),
   doorClosed(passable: false, blocksSight: true),
-  doorOpen(passable: true, blocksSight: false);
+  doorOpen(passable: true, blocksSight: false),
+
+  /// 아래층으로 내려가는 계단.
+  stairsDown(passable: true, blocksSight: false),
+
+  /// 위층으로 올라가는 계단.
+  stairsUp(passable: true, blocksSight: false);
 
   const TileType({required this.passable, required this.blocksSight});
 
@@ -12,4 +18,6 @@ enum TileType {
 
   /// 경로탐색 기준으로 지나갈 수 있는지 (닫힌 문은 열고 지나간다).
   bool get traversable => passable || this == TileType.doorClosed;
+
+  bool get isStairs => this == stairsDown || this == stairsUp;
 }

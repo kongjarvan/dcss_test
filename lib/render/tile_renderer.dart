@@ -64,7 +64,65 @@ class ProceduralTileRenderer implements TileRenderer {
       case TileType.doorOpen:
         _floor(canvas, rect, pos);
         _doorOpen(canvas, rect);
+      case TileType.stairsDown:
+        _floor(canvas, rect, pos);
+        _stairsDown(canvas, rect);
+      case TileType.stairsUp:
+        _floor(canvas, rect, pos);
+        _stairsUp(canvas, rect);
     }
+  }
+
+  /// 위로 올라가는 계단: 왼쪽 아래에서 오른쪽 위로 쌓인 밝은 계단 단.
+  void _stairsUp(Canvas c, Rect r) {
+    final inner = r.deflate(r.width * 0.12);
+    const steps = 4;
+    final stepW = inner.width / steps;
+    final stepH = inner.height / steps;
+    final profile = Path()..moveTo(inner.left, inner.bottom);
+    for (var i = 0; i < steps; i++) {
+      final x = inner.left + stepW * i;
+      final y = inner.bottom - stepH * (i + 1);
+      profile
+        ..lineTo(x, y)
+        ..lineTo(x + stepW, y);
+    }
+    profile
+      ..lineTo(inner.right, inner.bottom)
+      ..close();
+    c.drawPath(profile, _fill(const Color(0xFFB8A27A)));
+    c.drawPath(
+      profile,
+      _stroke(const Color(0xFF6B5432), math.max(1, r.width * 0.04))
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  /// 아래로 내려가는 계단: 안쪽(아래)으로 갈수록 어두워지는 계단 단.
+  void _stairsDown(Canvas c, Rect r) {
+    final inner = r.deflate(r.width * 0.1);
+    c.drawRect(inner, _fill(const Color(0xFF0E0C0A)));
+    const steps = 4;
+    final stepH = inner.height / steps;
+    for (var i = 0; i < steps; i++) {
+      // 위쪽 단이 가장 밝고 넓다.
+      final shrink = inner.width * 0.07 * i;
+      final shade = 150 - i * 30;
+      c.drawRect(
+        Rect.fromLTWH(
+          inner.left + shrink,
+          inner.top + stepH * i,
+          inner.width - shrink * 2,
+          stepH * 0.7,
+        ),
+        _fill(Color.fromARGB(255, shade, shade - 12, shade - 28)),
+      );
+    }
+    c.drawRect(
+      inner,
+      _stroke(const Color(0xFF8A6A30), math.max(1, r.width * 0.05))
+        ..style = PaintingStyle.stroke,
+    );
   }
 
   void _floor(Canvas c, Rect r, Pos pos) {
@@ -256,10 +314,64 @@ class ProceduralTileRenderer implements TileRenderer {
     switch (type.id) {
       case 'goblin':
         _goblin(c, r, weapon);
+      case 'orc':
+        _orc(c, r, weapon);
       default:
         _shadow(c, r);
         c.drawCircle(r.center, r.width * 0.3, _fill(const Color(0xFFB04040)));
     }
+  }
+
+  /// 오크: 고블린보다 크고 어깨가 넓다. 회녹색 피부, 아래로 솟은 엄니.
+  void _orc(Canvas c, Rect r, WeaponType? weapon) {
+    final w = r.width;
+    final h = r.height;
+    final cx = r.center.dx;
+    const skin = Color(0xFF7E9A6A);
+    _shadow(c, r);
+    if (weapon != null) {
+      _weapon(
+        c,
+        Offset(cx - w * 0.32, r.top + h * 0.8),
+        Offset(cx - w * 0.42, r.top + h * 0.24),
+        w,
+        weapon.skill,
+      );
+    }
+    // 몸통 (가죽 조끼)
+    final body = Path()
+      ..moveTo(cx - w * 0.26, r.top + h * 0.88)
+      ..lineTo(cx + w * 0.26, r.top + h * 0.88)
+      ..lineTo(cx + w * 0.22, r.top + h * 0.46)
+      ..lineTo(cx - w * 0.22, r.top + h * 0.46)
+      ..close();
+    c.drawPath(body, _fill(const Color(0xFF5A4632)));
+    c.drawLine(
+      Offset(cx - w * 0.22, r.top + h * 0.66),
+      Offset(cx + w * 0.22, r.top + h * 0.66),
+      _stroke(const Color(0xFF3A2C1E), w * 0.05),
+    );
+    // 머리 (턱이 넓은 타원)
+    final head = Rect.fromCenter(
+      center: Offset(cx, r.top + h * 0.33),
+      width: w * 0.36,
+      height: h * 0.3,
+    );
+    c.drawOval(head, _fill(skin));
+    // 엄니
+    final tusk = _fill(const Color(0xFFF2EBD9));
+    for (final side in [-1.0, 1.0]) {
+      final tuskPath = Path()
+        ..moveTo(cx + side * w * 0.08, r.top + h * 0.4)
+        ..lineTo(cx + side * w * 0.12, r.top + h * 0.4)
+        ..lineTo(cx + side * w * 0.1, r.top + h * 0.33)
+        ..close();
+      c.drawPath(tuskPath, tusk);
+    }
+    // 눈
+    final eye = _fill(const Color(0xFFFFC23A));
+    c.drawCircle(Offset(cx - w * 0.07, r.top + h * 0.3), w * 0.03, eye);
+    c.drawCircle(Offset(cx + w * 0.07, r.top + h * 0.3), w * 0.03, eye);
   }
 
   void _goblin(Canvas c, Rect r, WeaponType? weapon) {

@@ -15,7 +15,6 @@ import 'package:dc_test/core/world/tile.dart';
 import 'package:dc_test/ui/character_sheet.dart';
 import 'package:dc_test/ui/game_controller.dart';
 import 'package:dc_test/ui/game_screen.dart';
-import 'package:dc_test/ui/inventory_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -423,7 +422,7 @@ void main() {
     });
   });
 
-  testWidgets('소지품 화면에서 장착하고, 캐릭터 창의 전투 능력에서 확인한다', (tester) async {
+  testWidgets('옆 패널 소지품 칸에서 장착하고, 캐릭터 창의 전투 능력에서 확인한다', (tester) async {
     final controller = GameController(seed: 1, job: Job.fighter);
     final axe = Item(ItemTypes.handAxe);
     controller.game.player.inventory.add(axe);
@@ -431,11 +430,6 @@ void main() {
       MaterialApp(home: GameScreen(controller: controller)),
     );
 
-    await tester.tap(find.byTooltip('아이템'));
-    await tester.pump();
-    await tester.tap(find.byTooltip('소지품'));
-    await tester.pumpAndSettle();
-    expect(find.byType(InventoryScreen), findsOneWidget);
     expect(find.byTooltip('손도끼'), findsOneWidget);
 
     await tester.tap(find.byTooltip('손도끼'));
@@ -447,14 +441,8 @@ void main() {
 
     await tester.tapAt(const Offset(200, 40)); // 시트 바깥 → 시트 닫기
     await tester.pumpAndSettle();
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    // 아이템 탭에는 장비 버튼이 없다.
-    expect(find.byTooltip('장비'), findsNothing);
 
-    // 전투 능력 요약은 캐릭터 창에 있다.
-    await tester.tap(find.byTooltip('적성'));
-    await tester.pump();
+    // 전투 능력 요약은 캐릭터 창 (상태바의 레벨·층을 누름).
     await tester.tap(find.byTooltip('캐릭터'));
     await tester.pumpAndSettle();
     expect(find.text('전투 능력'), findsOneWidget);

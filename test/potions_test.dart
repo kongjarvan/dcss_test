@@ -259,7 +259,7 @@ void main() {
     expect(counts[Potion.curing]!, greaterThan(counts[Potion.experience]! * 5));
   });
 
-  testWidgets('아이템 탭의 마시기 버튼으로 물약을 마시고 상태가 표시된다', (tester) async {
+  testWidgets('옆 패널 소지품 칸에서 물약을 마시고 상태가 표시된다', (tester) async {
     final controller = GameController(seed: 1);
     final game = controller.game;
     game.monsters.clear();
@@ -268,18 +268,13 @@ void main() {
       MaterialApp(home: GameScreen(controller: controller)),
     );
 
-    await tester.tap(find.byTooltip('아이템'));
-    await tester.pump();
-    final drink = find.byTooltip('물약 마시기 · 물약 없음');
-    expect(drink, findsOneWidget);
-
     give(game, Potion.haste);
     controller.waitTurn();
     await tester.pump();
-    await tester.tap(find.byTooltip('물약 마시기'));
-    await tester.pumpAndSettle();
     final look = game.potionAppearance[Potion.haste]!.name;
-    await tester.tap(find.text('$look 물약').last); // 위에 뜬 선택 창
+    await tester.tap(find.byTooltip('$look 물약'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('마시기'));
     await tester.pumpAndSettle();
 
     expect(game.player.has(Status.haste), isTrue);

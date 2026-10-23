@@ -128,8 +128,6 @@ void main() {
 
   testWidgets('캐릭터 화면에서 포인트를 투자한다', (tester) async {
     await tester.pumpWidget(const DungeonApp(seed: 42, species: Species.human));
-    await tester.tap(find.byTooltip('적성'));
-    await tester.pump();
 
     // 포인트가 없으면 + 버튼이 비활성(숨김)이다.
     await tester.tap(find.byTooltip('캐릭터'));
@@ -209,8 +207,6 @@ void main() {
 
   testWidgets('캐릭터 버튼으로 직접 연 창은 자유롭게 닫힌다', (tester) async {
     await pumpGame(tester);
-    await tester.tap(find.byTooltip('적성'));
-    await tester.pump();
     await tester.tap(find.byTooltip('캐릭터'));
     await tester.pumpAndSettle();
     expect(find.byType(CharacterSheet), findsOneWidget);

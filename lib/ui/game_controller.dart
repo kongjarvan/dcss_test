@@ -10,6 +10,7 @@ import '../core/items/item.dart';
 import '../core/progression/attributes.dart';
 import '../core/progression/job.dart';
 import '../core/progression/skills.dart';
+import '../core/world/tile.dart';
 import '../core/progression/species.dart';
 
 /// 자동 이동 종류.
@@ -122,21 +123,6 @@ class GameController extends ChangeNotifier {
   void drop(Item item) => _act(DropAction(item));
   void quaff(Item item) => _act(QuaffAction(item));
 
-  bool get hasPotions =>
-      _game.player.inventory.any((i) => i.type is PotionType);
-
-  // ── 원거리 ──
-  bool get hasLauncher => _game.player.launcher != null;
-
-  /// 활로 쏠 수 있는 가장 가까운 적.
-  Monster? get rangedTarget => _game.rangedTarget();
-
-  void fireRanged() {
-    final target = rangedTarget;
-    if (target == null) return;
-    _act(RangedAttackAction(target));
-  }
-
   void _act(Action action) {
     if (_game.isGameOver) return;
     _game.playerAct(action);
@@ -190,6 +176,53 @@ class GameController extends ChangeNotifier {
 
   void stopTravel() {
     _stopAutoMove();
+    notifyListeners();
+  }
+
+  // ── 계단 ──
+  /// 발밑 계단 종류. 계단 위가 아니면 null.
+  TileType? get stairsHere {
+    final tile = _game.map[_game.player.pos];
+    return tile.isStairs ? tile : null;
+  }
+
+  /// 올라가는 계단이지만 위층이 없는 경우(1층)는 쓸 수 없다.
+  bool get onStairs => switch (stairsHere) {
+    TileType.stairsDown => true,
+    TileType.stairsUp => _game.depth > 1,
+    _ => false,
+  };
+
+  /// 본 적 있는 내려가는 계단 중 가장 가까운 곳 (걸어서 가는 거리). 없으면 null.
+  Pos? get knownStairs {
+    Pos? best;
+    var bestLength = 1 << 30;
+    for (final stairs in _game.stairsDown) {
+      if (!_game.map.isExplored(stairs)) continue;
+      final path = _game.travelPath(stairs);
+      if (path != null && path.length < bestLength) {
+        best = stairs;
+        bestLength = path.length;
+      }
+    }
+    return best;
+  }
+
+  bool get canUseStairs =>
+      !_game.isGameOver && (onStairs || (knownStairs != null && !enemyInSight));
+
+  /// 계단 위면 그 계단을 이용하고(내려가기·올라가기),
+  /// 아니면 본 적 있는 가장 가까운 내려가는 계단까지 자동 이동한다.
+  void useOrGoToStairs() {
+    if (_game.isGameOver) return;
+    if (onStairs) {
+      _stopAutoMove();
+      _act(const UseStairsAction());
+      return;
+    }
+    final stairs = knownStairs;
+    if (stairs == null || isTraveling) return;
+    _startTravel(stairs);
     notifyListeners();
   }
 

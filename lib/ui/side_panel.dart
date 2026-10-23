@@ -3,7 +3,15 @@ import 'package:flutter/material.dart';
 import '../core/progression/skills.dart';
 import 'game_controller.dart';
 import 'inventory_screen.dart';
-import 'skills_screen.dart';
+
+/// 적성 값 표시용 색: 높으면 초록, 낮으면 빨강.
+Color aptitudeColor(int aptitude) => aptitude > 0
+    ? const Color(0xFF7BC67B)
+    : aptitude < 0
+    ? const Color(0xFFE57373)
+    : const Color(0xFF6E685E);
+
+String aptitudeText(int aptitude) => aptitude > 0 ? '+$aptitude' : '$aptitude';
 
 enum SidePanelView {
   inventory('소지품 목록', Icons.inventory_2),

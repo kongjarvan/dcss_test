@@ -12,6 +12,7 @@ import 'items/item.dart';
 import 'items/potion_appearance.dart';
 import 'world/tile.dart';
 import 'korean.dart';
+import 'level.dart';
 import 'message_log.dart';
 import 'progression/attribute_effects.dart';
 import 'progression/attributes.dart';
@@ -25,10 +26,11 @@ import 'world/dungeon_map.dart';
 class Game {
   Game({
     required this.rng,
-    required this.map,
+    required DungeonMap map,
     required this.player,
     List<Monster>? monsters,
-  }) : monsters = monsters ?? [] {
+  }) : level = Level(depth: 1, map: map, monsters: monsters) {
+    _levels[1] = level;
     // 게임마다 물약 색을 무작위로 배정한다 (마셔 보기 전엔 무슨 물약인지 모름).
     final looks = [...PotionAppearance.all]..shuffle(rng);
     for (final (i, potion) in Potion.values.indexed) {
@@ -61,49 +63,76 @@ class Game {
 
   factory Game.newGame({int? seed, Species species = Species.human, Job? job}) {
     final rng = Random(seed ?? DateTime.now().microsecondsSinceEpoch);
-    final level = DungeonGenerator(rng).generate();
+    final generated = DungeonGenerator(rng).generate();
     final player = Player(
-      pos: level.rooms.first.center,
+      pos: generated.rooms.first.center,
       species: species,
       job: job,
     );
-    final monsters = <Monster>[];
+    final game = Game(rng: rng, map: generated.map, player: player);
+    game._enterGeneratedLevel(generated, depth: 1);
+    game.message('던전 1층에 들어섰다. 화면을 탭해 이동하세요.');
+    return game;
+  }
 
-    for (final room in level.rooms.skip(1)) {
-      final count = rng.nextInt(3);
-      for (var i = 0; i < count; i++) {
-        final p = Pos(
-          room.left + rng.nextInt(room.width),
-          room.top + rng.nextInt(room.height),
-        );
-        if (p == player.pos || monsters.any((m) => m.pos == p)) continue;
-        // 초기 에너지를 흩뿌려 몬스터들이 같은 박자로 움직이지 않게 한다.
-        monsters.add(
-          Monster(MonsterTypes.goblin, pos: p)
-            ..energy = -rng.nextInt(autPerTurn * normalSpeed)
-            ..equipRandomGear(rng),
-        );
-      }
-    }
+  // ── 층 ──
+  /// 지금 있는 층.
+  Level level;
 
-    final game = Game(
-      rng: rng,
-      map: level.map,
-      player: player,
-      monsters: monsters,
+  /// 한 번이라도 가 본 층들 (깊이별).
+  final Map<int, Level> _levels = {};
+
+  int get depth => level.depth;
+  DungeonMap get map => level.map;
+  List<Monster> get monsters => level.monsters;
+  List<Pos> get stairsDown => level.stairsDown;
+  List<Pos> get stairsUp => level.stairsUp;
+
+  /// 이 층에 가 본 적이 있는지 (깊이별).
+  bool hasVisited(int depth) => _levels.containsKey(depth);
+
+  /// 깊이에 따른 방당 최대 몬스터 수 (1층 2마리, 3층마다 1마리씩 늘어남).
+  int get maxMonstersPerRoom => 2 + (depth - 1) ~/ 3;
+
+  /// 새로 생성한 층을 현재 층으로 만들고 몬스터·아이템을 배치한다.
+  void _enterGeneratedLevel(GeneratedLevel generated, {required int depth}) {
+    level = Level(
+      depth: depth,
+      map: generated.map,
+      stairsDown: generated.stairsDown,
+      stairsUp: generated.stairsUp,
     );
-    // 시작 방을 뺀 방마다 일정 확률로 무작위 장비 하나, 물약 하나.
+    _levels[depth] = level;
+    _monstersInView = {};
+
+    // 도착 지점(1층 시작 방, 올라가는 계단이 있는 방)에는 몬스터를 두지 않는다.
+    bool isArrivalRoom(GridRect room) =>
+        (depth == 1 && room == generated.rooms.first) ||
+        generated.stairsUp.any(room.contains);
     Pos randomCell(GridRect room) => Pos(
       room.left + rng.nextInt(room.width),
       room.top + rng.nextInt(room.height),
     );
-    for (final room in level.rooms.skip(1)) {
+    for (final room in generated.rooms) {
+      if (isArrivalRoom(room)) continue;
+      final count = rng.nextInt(maxMonstersPerRoom + 1);
+      for (var i = 0; i < count; i++) {
+        final p = randomCell(room);
+        if (p == player.pos || monsters.any((m) => m.pos == p)) continue;
+        // 초기 에너지를 흩뿌려 몬스터들이 같은 박자로 움직이지 않게 한다.
+        monsters.add(
+          Monster(MonsterTypes.randomFor(depth, rng), pos: p)
+            ..energy = -rng.nextInt(autPerTurn * normalSpeed)
+            ..equipRandomGear(rng),
+        );
+      }
+      // 무작위 장비 하나, 물약 하나 (각각 일정 확률).
       if (rng.nextDouble() < itemChancePerRoom) {
         final type = ItemTypes.all[rng.nextInt(ItemTypes.all.length)];
-        game.addFloorItem(randomCell(room), Item(type));
+        addFloorItem(randomCell(room), Item(type));
       }
       if (rng.nextDouble() < potionChancePerRoom) {
-        game.addFloorItem(
+        addFloorItem(
           randomCell(room),
           Item(
             PotionType.of(randomPotion(rng)),
@@ -112,16 +141,66 @@ class Game {
         );
       }
     }
-    game.message('던전 1층에 들어섰다. 화면을 탭해 이동하세요.');
-    return game;
+    updateFov();
+  }
+
+  /// 발밑 계단을 이용한다. 내려가는 계단이면 아래층(처음이면 새로 생성),
+  /// 올라가는 계단이면 위층으로. 짝이 되는 계단 위에 도착한다. 계단이 아니면 false.
+  bool useStairs() {
+    final here = player.pos;
+    final down = stairsDown.indexOf(here);
+    final up = stairsUp.indexOf(here);
+    if (down >= 0) {
+      final target = depth + 1;
+      final known = _levels[target];
+      if (known == null) {
+        final generated = DungeonGenerator(rng).generate(stairsUp: 3);
+        player.pos = generated.stairsUp[down];
+        _enterGeneratedLevel(generated, depth: target);
+      } else {
+        _switchLevel(known, known.stairsUp[down]);
+      }
+      message('계단을 내려가 $depth층에 도착했다.');
+      return true;
+    }
+    if (up >= 0 && _levels[depth - 1] != null) {
+      final above = _levels[depth - 1]!;
+      _switchLevel(above, above.stairsDown[up]);
+      message('계단을 올라 $depth층으로 돌아왔다.');
+      return true;
+    }
+    return false;
+  }
+
+  /// 저장해 둔 층으로 옮긴다. 도착 칸에 몬스터가 있으면 가까운 빈칸으로 비켜 준다.
+  void _switchLevel(Level target, Pos arrival) {
+    level = target;
+    player.pos = arrival;
+    _monstersInView = {};
+    for (final m in monsters) {
+      if (m.isAlive && m.pos == arrival) m.pos = _nearestFreeCell(arrival);
+    }
+    updateFov();
+  }
+
+  Pos _nearestFreeCell(Pos from) {
+    final seen = <Pos>{from};
+    final queue = [from];
+    for (var i = 0; i < queue.length; i++) {
+      for (final d in Direction.all) {
+        final q = queue[i] + d;
+        if (!map.contains(q) || !map[q].passable || !seen.add(q)) continue;
+        if (actorAt(q) == null && q != player.pos) return q;
+        queue.add(q);
+      }
+    }
+    return from;
   }
 
   static const fovRadius = 8;
 
   final Random rng;
-  final DungeonMap map;
   final Player player;
-  final List<Monster> monsters;
   final MessageLog log = MessageLog();
 
   /// 누적 게임 시간 (aut).
@@ -183,10 +262,8 @@ class Game {
   /// 시작 방이 아닌 방에 물약이 놓일 확률.
   static const potionChancePerRoom = 0.5;
 
-  final Map<Pos, List<Item>> _floorItems = {};
-
-  /// 플레이어가 이미 올라서서 확인한 아이템 더미 (자동 탐험이 다시 찾아가지 않음).
-  final Set<Pos> _noticedPiles = {};
+  Map<Pos, List<Item>> get _floorItems => level.floorItems;
+  Set<Pos> get _noticedPiles => level.noticedPiles;
 
   List<Item> itemsAt(Pos p) => List.unmodifiable(_floorItems[p] ?? const []);
 

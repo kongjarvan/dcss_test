@@ -71,8 +71,6 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
     );
-    await tester.tap(find.byTooltip('적성'));
-    await tester.pump();
     await tester.tap(find.byTooltip('캐릭터'));
     await tester.pumpAndSettle();
     expect(find.byType(CharacterSheet), findsOneWidget);

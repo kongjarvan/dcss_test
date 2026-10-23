@@ -10,10 +10,6 @@ import 'package:dc_test/core/progression/skills.dart';
 import 'package:dc_test/core/progression/species.dart';
 import 'package:dc_test/core/world/dungeon_map.dart';
 import 'package:dc_test/core/world/tile.dart';
-import 'package:dc_test/ui/game_controller.dart';
-import 'package:dc_test/ui/game_screen.dart';
-import 'package:dc_test/ui/skills_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 typedef P = SkillProgression;
@@ -165,30 +161,5 @@ void main() {
     );
     game.playerAct(const MoveAction(Direction.e));
     expect(player.skills.xp(Skill.sword), MonsterTypes.goblin.xp);
-  });
-
-  testWidgets('숙련도 화면에서 훈련을 켜고 끈다', (tester) async {
-    final controller = GameController(seed: 1, job: Job.fighter);
-    await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
-    );
-    await tester.tap(find.byTooltip('적성'));
-    await tester.pump();
-    await tester.tap(find.byTooltip('숙련도'));
-    await tester.pumpAndSettle();
-    expect(find.byType(SkillsScreen), findsOneWidget);
-    expect(find.text('얻은 경험치가 훈련 중인 숙련도 4개에 똑같이 나뉘어 쌓입니다.'), findsOneWidget);
-
-    final skills = controller.game.player.skills;
-    expect(skills.isTraining(Skill.bow), isFalse);
-    await tester.scrollUntilVisible(find.text('활'), 100);
-    await tester.tap(find.text('활'));
-    await tester.pump();
-    expect(skills.isTraining(Skill.bow), isTrue);
-    expect(skills.training.length, 5); // 헤더는 스크롤로 화면 밖
-
-    await tester.tap(find.text('활'));
-    await tester.pump();
-    expect(skills.isTraining(Skill.bow), isFalse);
   });
 }

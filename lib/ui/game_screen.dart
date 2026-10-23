@@ -411,12 +411,34 @@ class _StatusBar extends StatelessWidget {
           // 레벨·층, 그 오른쪽에 발밑 아이템 (누르면 상세 정보).
           Row(
             children: [
-              Text(
-                'Lv ${player.level} · 1층',
-                style: const TextStyle(
-                  color: Color(0xFFD8B04A),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+              // 누르면 캐릭터 창 (능력치·전투 능력·신앙심).
+              Tooltip(
+                message: '캐릭터',
+                child: InkWell(
+                  onTap: () => showCharacterSheet(context, controller),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.person,
+                          size: 15,
+                          color: Color(0xFFD8B04A),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          'Lv ${player.level} · ${game.depth}층',
+                          style: const TextStyle(
+                            color: Color(0xFFD8B04A),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -732,7 +754,7 @@ class _GameOverOverlay extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                '생존 시간 ${_turns(game.time)}턴 · 처치 ${game.kills}',
+                '${game.depth}층 · 생존 시간 ${_turns(game.time)}턴 · 처치 ${game.kills}',
                 style: const TextStyle(color: Colors.white70, fontSize: 15),
               ),
               const SizedBox(height: 24),

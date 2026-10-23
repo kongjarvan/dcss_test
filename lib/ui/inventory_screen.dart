@@ -29,10 +29,7 @@ String itemSummary(Game game, Item item) {
     ].join(' · '),
     ArmourType() => '방어 ${type.ac} · 무게 ${type.encumbrance}',
     ShieldType() => '막기 ${type.block} · 무게 ${type.encumbrance}',
-    PotionType() =>
-      game.isIdentified(item)
-          ? type.potion.description
-          : '마셔 보기 전에는 어떤 물약인지 알 수 없다.',
+    PotionType() => game.isIdentified(item) ? type.potion.description : '마셔 보기 전에는 어떤 물약인지 알 수 없다.',
   };
 }
 
@@ -40,8 +37,7 @@ String itemSummary(Game game, Item item) {
 class ItemIcon extends StatelessWidget {
   const ItemIcon(this.type, {super.key, this.tint, this.size = 40});
 
-  ItemIcon.of(Game game, Item item, {Key? key, double size = 40})
-    : this(item.type, key: key, tint: potionTint(game, item.type), size: size);
+  ItemIcon.of(Game game, Item item, {Key? key, double size = 40}) : this(item.type, key: key, tint: potionTint(game, item.type), size: size);
 
   final ItemType type;
   final int? tint;
@@ -66,106 +62,16 @@ class _ItemPainter extends CustomPainter {
   final int? tint;
 
   @override
-  void paint(Canvas canvas, Size size) =>
-      _renderer.drawItem(canvas, Offset.zero & size, type, tint: tint);
+  void paint(Canvas canvas, Size size) => _renderer.drawItem(canvas, Offset.zero & size, type, tint: tint);
 
   @override
   bool shouldRepaint(_ItemPainter old) => old.type != type || old.tint != tint;
 }
 
-/// 화면 아래에 가장 최근 메시지를 보여준다 (장착 결과 등 확인용).
-class _LastMessage extends StatelessWidget {
-  const _LastMessage({required this.controller});
-
-  final GameController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final recent = controller.game.log.recent(1);
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFF15120F),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: SafeArea(
-        top: false,
-        child: Text(
-          recent.isEmpty ? '' : recent.single.text,
-          style: const TextStyle(color: Color(0xFFF2EDE4), fontSize: 13),
-        ),
-      ),
-    );
-  }
-}
-
-Scaffold _screen({
-  required String title,
-  required GameController controller,
-  required Widget Function() body,
-}) {
-  return Scaffold(
-    backgroundColor: const Color(0xFF0E0C0A),
-    appBar: AppBar(
-      backgroundColor: const Color(0xFF0E0C0A),
-      title: ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => Text(title),
-      ),
-    ),
-    body: ListenableBuilder(listenable: controller, builder: (_, _) => body()),
-    bottomNavigationBar: ListenableBuilder(
-      listenable: controller,
-      builder: (_, _) => _LastMessage(controller: controller),
-    ),
-  );
-}
-
-// ───────────────────────── 소지품 ─────────────────────────
-
-class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key, required this.controller});
-
-  final GameController controller;
-
-  static Future<void> open(BuildContext context, GameController controller) =>
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => InventoryScreen(controller: controller),
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final player = controller.game.player;
-    return _screen(
-      title: '소지품',
-      controller: controller,
-      body: () {
-        final items = player.inventory;
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              '${items.length} / ${Player.inventoryCapacity}칸 · 누르면 상세 정보, 길게 누르면 이름',
-              style: _dim,
-            ),
-            const SizedBox(height: 12),
-            InventoryGrid(controller: controller, cellSize: 64),
-          ],
-        );
-      },
-    );
-  }
-}
-
 /// DCSS식 소지품 칸: 아이콘만 보이고, 누르면 상세 정보.
 /// 겹친 개수는 오른쪽 아래 숫자, 장착 중이면 노란 테두리. 빈 칸도 흐리게 보여준다.
 class InventoryGrid extends StatelessWidget {
-  const InventoryGrid({
-    super.key,
-    required this.controller,
-    this.cellSize = 44,
-    this.shrinkWrap = true,
-  });
+  const InventoryGrid({super.key, required this.controller, this.cellSize = 44, this.shrinkWrap = true});
 
   final GameController controller;
   final double cellSize;
@@ -181,29 +87,16 @@ class InventoryGrid extends StatelessWidget {
       shrinkWrap: shrinkWrap,
       physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       padding: shrinkWrap ? EdgeInsets.zero : const EdgeInsets.all(8),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: cellSize,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
-      ),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: cellSize, mainAxisSpacing: 4, crossAxisSpacing: 4),
       itemCount: Player.inventoryCapacity,
-      itemBuilder: (context, i) => i < items.length
-          ? _ItemCell(
-              game: game,
-              item: items[i],
-              onTap: () => showItemSheet(context, controller, items[i]),
-            )
-          : const _EmptyCell(),
+      itemBuilder: (context, i) =>
+          i < items.length ? _ItemCell(game: game, item: items[i], onTap: () => showItemSheet(context, controller, items[i])) : const _EmptyCell(),
     );
   }
 }
 
 class _ItemCell extends StatelessWidget {
-  const _ItemCell({
-    required this.game,
-    required this.item,
-    required this.onTap,
-  });
+  const _ItemCell({required this.game, required this.item, required this.onTap});
 
   final Game game;
   final Item item;
@@ -218,10 +111,7 @@ class _ItemCell extends StatelessWidget {
         color: const Color(0xFF2A2621),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(6),
-          side: BorderSide(
-            color: equipped ? const Color(0xFFFFD54F) : const Color(0xFF3A342D),
-            width: equipped ? 2 : 1,
-          ),
+          side: BorderSide(color: equipped ? const Color(0xFFFFD54F) : const Color(0xFF3A342D), width: equipped ? 2 : 1),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -240,12 +130,7 @@ class _ItemCell extends StatelessWidget {
                   bottom: 1,
                   child: Text(
                     '${item.quantity}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      shadows: [Shadow(blurRadius: 2)],
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 2)]),
                   ),
                 ),
             ],
@@ -270,19 +155,14 @@ class _EmptyCell extends StatelessWidget {
 }
 
 /// 아이템 상세 창 (장착/해제·마시기·버리기). 소지품 화면과 옆 패널에서 함께 쓴다.
-Future<void> showItemSheet(
-  BuildContext context,
-  GameController controller,
-  Item item,
-) {
+Future<void> showItemSheet(BuildContext context, GameController controller, Item item) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: const Color(0xFF1A1714),
     showDragHandle: true,
     builder: (sheetContext) => ListenableBuilder(
       listenable: controller,
-      builder: (sheetContext, _) =>
-          _ItemSheet(controller: controller, item: item),
+      builder: (sheetContext, _) => _ItemSheet(controller: controller, item: item),
     ),
   );
 }
@@ -307,12 +187,9 @@ class _ItemSheet extends StatelessWidget {
     }
     final type = item.type;
     final equipped = player.isEquipped(item);
-    final problem = type is EquipmentType && !equipped
-        ? player.equipProblem(item)
-        : null;
+    final problem = type is EquipmentType && !equipped ? player.equipProblem(item) : null;
     final kind = switch (type) {
-      EquipmentType() =>
-        '${type.slot.label} · 장착/해제 ${_turns(type.equipTime)}턴',
+      EquipmentType() => '${type.slot.label} · 장착/해제 ${_turns(type.equipTime)}턴',
       PotionType() => '물약 · 마시는 데 1턴',
     };
 
@@ -333,11 +210,7 @@ class _ItemSheet extends StatelessWidget {
                     children: [
                       Text(
                         game.nameOf(item),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                       Text(kind, style: _dim),
                     ],
@@ -346,17 +219,8 @@ class _ItemSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              itemSummary(game, item),
-              style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 14),
-            ),
-            if (problem != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                problem,
-                style: const TextStyle(color: Color(0xFFE57373), fontSize: 13),
-              ),
-            ],
+            Text(itemSummary(game, item), style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 14)),
+            if (problem != null) ...[const SizedBox(height: 8), Text(problem, style: const TextStyle(color: Color(0xFFE57373), fontSize: 13))],
             const SizedBox(height: 16),
             Row(
               children: [
@@ -376,9 +240,7 @@ class _ItemSheet extends StatelessWidget {
                   EquipmentType() => IconButton.filled(
                     tooltip: '장착',
                     iconSize: 28,
-                    onPressed: problem == null
-                        ? () => controller.equip(item)
-                        : null,
+                    onPressed: problem == null ? () => controller.equip(item) : null,
                     icon: const Icon(Icons.check_circle_outline),
                   ),
                 },
@@ -399,19 +261,14 @@ class _ItemSheet extends StatelessWidget {
 }
 
 /// 발밑(바닥) 아이템의 상세 창. 줍기 버튼으로 그 아이템만 줍는다.
-Future<void> showFloorItemSheet(
-  BuildContext context,
-  GameController controller,
-  Item item,
-) {
+Future<void> showFloorItemSheet(BuildContext context, GameController controller, Item item) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: const Color(0xFF1A1714),
     showDragHandle: true,
     builder: (sheetContext) => ListenableBuilder(
       listenable: controller,
-      builder: (sheetContext, _) =>
-          _FloorItemSheet(controller: controller, item: item),
+      builder: (sheetContext, _) => _FloorItemSheet(controller: controller, item: item),
     ),
   );
 }
@@ -432,9 +289,7 @@ class _FloorItemSheet extends StatelessWidget {
       });
       return const SizedBox.shrink();
     }
-    final full =
-        game.player.isInventoryFull &&
-        !game.player.inventory.any((owned) => owned.canStackWith(item));
+    final full = game.player.isInventoryFull && !game.player.inventory.any((owned) => owned.canStackWith(item));
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -452,11 +307,7 @@ class _FloorItemSheet extends StatelessWidget {
                     children: [
                       Text(
                         game.nameOf(item),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                       const Text('바닥 · 줍는 데 1턴', style: _dim),
                     ],
@@ -465,17 +316,8 @@ class _FloorItemSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Text(
-              itemSummary(game, item),
-              style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 14),
-            ),
-            if (full) ...[
-              const SizedBox(height: 8),
-              const Text(
-                '소지품이 가득 찼다.',
-                style: TextStyle(color: Color(0xFFE57373), fontSize: 13),
-              ),
-            ],
+            Text(itemSummary(game, item), style: const TextStyle(color: Color(0xFFD8CFBF), fontSize: 14)),
+            if (full) ...[const SizedBox(height: 8), const Text('소지품이 가득 찼다.', style: TextStyle(color: Color(0xFFE57373), fontSize: 13))],
             const SizedBox(height: 16),
             IconButton.filled(
               tooltip: full ? '줍기 · 소지품 가득' : '줍기',
@@ -515,10 +357,7 @@ class FloorItemStrip extends StatelessWidget {
               onTap: () => showFloorItemSheet(context, controller, item),
               borderRadius: BorderRadius.circular(4),
               child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2621),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                decoration: BoxDecoration(color: const Color(0xFF2A2621), borderRadius: BorderRadius.circular(4)),
                 child: ItemIcon.of(game, item, size: size),
               ),
             ),
@@ -529,34 +368,3 @@ class FloorItemStrip extends StatelessWidget {
   }
 }
 
-/// 물약 빠른 선택 창 (아이템 탭의 마시기 버튼). 누르면 바로 마시고 닫힌다.
-Future<void> showQuaffSheet(BuildContext context, GameController controller) {
-  final game = controller.game;
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: const Color(0xFF1A1714),
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          for (final item in game.player.inventory.where(
-            (i) => i.type is PotionType,
-          ))
-            ListTile(
-              leading: ItemIcon.of(game, item),
-              title: Text(
-                game.nameOf(item),
-                style: const TextStyle(color: Colors.white),
-              ),
-              subtitle: Text(itemSummary(game, item), style: _dim),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                controller.quaff(item);
-              },
-            ),
-        ],
-      ),
-    ),
-  );
-}
